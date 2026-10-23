@@ -21,6 +21,7 @@ export interface SessionTab {
   url: string;
   title: string;
   pinned: boolean;
+  companyId?: number | null;
 }
 export interface SessionSnapshot {
   tabs: SessionTab[];
@@ -69,6 +70,59 @@ const MIGRATIONS: string[] = [
     updated_at INTEGER NOT NULL,
     PRIMARY KEY (origin, permission)
   );
+  `,
+  /* v2 — Phase 2: research workspaces */ `
+  CREATE TABLE companies (
+    id               INTEGER PRIMARY KEY,
+    name             TEXT    NOT NULL,
+    ticker           TEXT,
+    exchange         TEXT    NOT NULL DEFAULT '',
+    country          TEXT    NOT NULL DEFAULT '',
+    sector           TEXT    NOT NULL DEFAULT '',
+    sector_kind      TEXT    NOT NULL DEFAULT 'general' CHECK (sector_kind IN ('general','bank','insurer','reit')),
+    ir_url           TEXT,
+    cik              TEXT,
+    color            TEXT    NOT NULL DEFAULT '#5b8cff',
+    followed         INTEGER NOT NULL DEFAULT 1,
+    thesis           TEXT    NOT NULL DEFAULT '',
+    price            REAL,
+    price_currency   TEXT,
+    price_as_of      TEXT,
+    price_source     TEXT,
+    saved_tabs       TEXT    NOT NULL DEFAULT '[]',
+    created_at       INTEGER NOT NULL,
+    updated_at       INTEGER NOT NULL
+  );
+  -- Same ticker on different exchanges are different companies (homonyms / dual listings).
+  CREATE UNIQUE INDEX companies_ticker_exchange ON companies(ticker, exchange) WHERE ticker IS NOT NULL;
+  CREATE TABLE sources (
+    id          INTEGER PRIMARY KEY,
+    company_id  INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    url         TEXT    NOT NULL,
+    title       TEXT    NOT NULL DEFAULT '',
+    accessed_at INTEGER NOT NULL,
+    UNIQUE (company_id, url)
+  );
+  CREATE TABLE notes (
+    id          INTEGER PRIMARY KEY,
+    company_id  INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    source_id   INTEGER REFERENCES sources(id) ON DELETE SET NULL,
+    kind        TEXT    NOT NULL CHECK (kind IN ('snippet','figure','note','conclusion','question')),
+    body        TEXT    NOT NULL DEFAULT '',
+    quote       TEXT,
+    metric      TEXT,
+    period      TEXT,
+    value       REAL,
+    scale       TEXT,
+    currency    TEXT,
+    origin      TEXT    CHECK (origin IS NULL OR origin IN ('published','user','estimate')),
+    resolved    INTEGER NOT NULL DEFAULT 0,
+    created_at  INTEGER NOT NULL,
+    updated_at  INTEGER NOT NULL,
+    -- A figure must be complete: no half-specified numbers.
+    CHECK (kind <> 'figure' OR (metric IS NOT NULL AND period IS NOT NULL AND value IS NOT NULL AND scale IS NOT NULL))
+  );
+  CREATE INDEX notes_company ON notes(company_id, created_at DESC);
   `,
 ];
 

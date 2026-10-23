@@ -1,20 +1,24 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, RotateCw, ShieldAlert, Unplug, X, Ban, Bug } from 'lucide-react';
 import { ib, useActiveTab, useOverlayState } from '../lib/ib';
-import { parseInternal } from '../../shared/url';
+import { parseInternalRoute } from '../../shared/url';
 import type { TabError } from '../../shared/types';
 import { NewTabPage } from '../pages/NewTabPage';
 import { HistoryPage } from '../pages/HistoryPage';
 import { BookmarksPage } from '../pages/BookmarksPage';
 import { DownloadsPage } from '../pages/DownloadsPage';
 import { SettingsPage } from '../pages/SettingsPage';
+import { ResearchPage } from '../pages/ResearchPage';
+import { CompanyPage } from '../pages/CompanyPage';
+import { ValuationPage } from '../pages/ValuationPage';
 
 export function ContentArea({ findRequest }: { findRequest: number }) {
   const tab = useActiveTab();
   const viewportRef = useRef<HTMLDivElement>(null);
   const overlay = useOverlayState();
   const [findOpen, setFindOpen] = useState(false);
-  const internal = tab ? parseInternal(tab.url) : null;
+  const route = tab ? parseInternalRoute(tab.url) : null;
+  const internal = route?.page ?? null;
 
   // Report the viewport rectangle to main so the native page view is placed exactly here.
   useLayoutEffect(() => {
@@ -58,6 +62,9 @@ export function ContentArea({ findRequest }: { findRequest: number }) {
         {internal === 'bookmarks' && <BookmarksPage />}
         {internal === 'downloads' && <DownloadsPage />}
         {internal === 'settings' && <SettingsPage />}
+        {internal === 'research' && <ResearchPage />}
+        {internal === 'company' && route?.id && <CompanyPage key={route.id} id={route.id} />}
+        {internal === 'valuation' && <ValuationPage key={route?.id ?? 0} companyId={route?.id ?? null} />}
         {!internal && tab?.error && <ErrorPage error={tab.error} />}
         {!internal && !tab?.error && overlay.active && (
           <div className="snapshot" aria-hidden>

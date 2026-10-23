@@ -25,7 +25,7 @@ afterEach(() => {
 
 describe('Store', () => {
   it('migrates to the latest schema version', () => {
-    expect(store.schemaVersion).toBe(1);
+    expect(store.schemaVersion).toBe(2);
   });
 
   it('returns defaults and persists settings across reopen', () => {

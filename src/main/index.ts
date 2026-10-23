@@ -2,12 +2,13 @@
  * Main process entry point: window, IPC, commands, persistence wiring.
  */
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, screen, session, type IpcMainInvokeEvent, type Rectangle } from 'electron';
-import { readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { Store } from './db';
 import { TabManager, internalTitle, WEB_PARTITION } from './tabs';
 import { configureWebSession, confirmExternal, installGlobalGuards, isTrustedUiUrl } from './security';
 import { DownloadManager } from './downloads';
+import { ResearchRepo, ValidationError } from './research';
 import { logError } from './log';
 import { BRAND } from '../shared/brand';
 import { COMMANDS, UI_COMMANDS, commandForInput, tabIndexForInput, type CommandId, type KeyInput } from '../shared/commands';
@@ -15,7 +16,9 @@ import { RequestSchemas, type EventChannel, type EventMap, type RequestChannel, 
 import { isInternalUrl, isSafeWebUrl, normalizeInput, NEW_TAB_URL, displayUrl } from '../shared/url';
 import { parseBookmarksHtml, serializeBookmarksHtml } from '../shared/bookmarksHtml';
 import { rankBy } from '../shared/fuzzy';
-import type { PopupNotice, Settings, Suggestion } from '../shared/types';
+import type { Company, PopupNotice, SaveDraft, Settings, Suggestion } from '../shared/types';
+import type { CompanyInput, NoteInput } from '../shared/ipc';
+import { normalizeTicker } from '../shared/sources';
 
 const isMac = process.platform === 'darwin';
 const DEV_SERVER_URL = !app.isPackaged ? process.env.VITE_DEV_SERVER_URL : undefined;
@@ -38,6 +41,8 @@ let tabs: TabManager;
 let downloads: DownloadManager;
 let settings: Settings;
 let popups: PopupNotice[] = [];
+let research: ResearchRepo;
+let companiesCache: Company[] = [];
 let stateQueued = false;
 let saveTimer: NodeJS.Timeout | null = null;
 
@@ -55,8 +60,10 @@ async function bootstrap(): Promise<void> {
     return;
   }
   store = opened;
+  research = new ResearchRepo(store.db);
+  companiesCache = research.listCompanies();
   settings = store.getSettings();
-  nativeTheme.themeSource = settings.theme;
+  nativeTheme.themeSource = themeSourceFor(settings.theme);
 
   const webSession = configureWebSession({ store, win: () => win });
   downloads = new DownloadManager(store, {
@@ -140,12 +147,22 @@ function resolvedTheme(): 'dark' | 'light' {
 }
 
 const CHROME_COLORS = {
-  dark: { bg: '#0d0f12', symbols: '#c9ced6' },
+  dark: { bg: '#0b0d10', symbols: '#c9ced6' },
   light: { bg: '#f4f5f7', symbols: '#3b4250' },
+  terminal: { bg: '#000000', symbols: '#ffb000' },
 };
 
+/** "terminal" is a dark theme for the OS and for web pages (prefers-color-scheme: dark). */
+function themeSourceFor(theme: Settings['theme']): 'system' | 'dark' | 'light' {
+  return theme === 'terminal' ? 'dark' : theme;
+}
+
+function chromeTheme(): keyof typeof CHROME_COLORS {
+  return settings?.theme === 'terminal' ? 'terminal' : resolvedTheme();
+}
+
 function applyTheme(): void {
-  const t = resolvedTheme();
+  const t = chromeTheme();
   if (win && !win.isDestroyed()) {
     win.setBackgroundColor(CHROME_COLORS[t].bg);
     if (!isMac) {
@@ -156,7 +173,7 @@ function applyTheme(): void {
       }
     }
   }
-  send('resolvedTheme', t);
+  send('resolvedTheme', resolvedTheme());
 }
 
 function restoredBounds(): Partial<Rectangle> & { maximized?: boolean } {
@@ -170,7 +187,7 @@ function restoredBounds(): Partial<Rectangle> & { maximized?: boolean } {
 
 function createWindow(): void {
   const bounds = restoredBounds();
-  const t = resolvedTheme();
+  const t = chromeTheme();
   win = new BrowserWindow({
     ...bounds,
     minWidth: 760,
@@ -209,6 +226,8 @@ function createWindow(): void {
     openExternalWithConsent: (url) => void confirmExternal(win, url),
     focusAddressBar: () => uiCommand('ui.focusAddress'),
     runCommand,
+    companies: () => companiesCache,
+    saveDraft: (draft) => openSaveDraft(draft),
   });
 
   win.webContents.on('before-input-event', (event, input) => {
@@ -250,7 +269,7 @@ function restoreTabs(): void {
   const fromArgs = process.argv.slice(1).find((a) => isSafeWebUrl(a) && a !== 'about:blank');
   if (settings.restoreSession && previous && previous.tabs.length) {
     previous.tabs.forEach((t, i) =>
-      tabs.create({ url: t.url, title: t.title, pinned: t.pinned, active: false, lazy: i !== previous.activeIndex }),
+      tabs.create({ url: t.url, title: t.title, pinned: t.pinned, active: false, lazy: i !== previous.activeIndex, companyId: t.companyId ?? null }),
     );
     const snap = tabs.snapshot();
     const active = snap.tabs[Math.min(previous.activeIndex, snap.tabs.length - 1)];
@@ -270,7 +289,7 @@ function restorePreviousSession(): void {
   let opened = 0;
   for (const t of prev.tabs) {
     if (existing.has(t.url)) continue;
-    tabs.create({ url: t.url, title: t.title, pinned: t.pinned, active: false, lazy: true });
+    tabs.create({ url: t.url, title: t.title, pinned: t.pinned, active: false, lazy: true, companyId: t.companyId ?? null });
     opened++;
   }
   send('toast', { message: `Sesión anterior restaurada: ${opened} pestaña(s).`, kind: 'info' });
@@ -317,7 +336,7 @@ function uiCommand(id: CommandId): void {
 
 function updateSettings(patch: Partial<Settings>): Settings {
   settings = store.updateSettings(patch);
-  if (patch.theme) nativeTheme.themeSource = settings.theme;
+  if (patch.theme) nativeTheme.themeSource = themeSourceFor(settings.theme);
   send('settings', settings);
   applyTheme();
   return settings;
@@ -412,7 +431,7 @@ function runCommand(id: CommandId): void {
       updateSettings({ tabLayout: settings.tabLayout === 'vertical' ? 'horizontal' : 'vertical' });
       break;
     case 'ui.cycleTheme': {
-      const order = ['dark', 'light', 'system'] as const;
+      const order = ['dark', 'terminal', 'light', 'system'] as const;
       updateSettings({ theme: order[(order.indexOf(settings.theme) + 1) % order.length] });
       break;
     }
@@ -459,6 +478,29 @@ function runCommand(id: CommandId): void {
       break;
     case 'bookmarks.export':
       void exportBookmarks();
+      break;
+    case 'research.save':
+      void tabs.captureSelection().then((d) => d && openSaveDraft({ ...d, kind: d.text ? 'snippet' : 'note' }));
+      break;
+    case 'open.research':
+      openInternal('ib://research');
+      break;
+    case 'open.valuation': {
+      const c = tabs.active?.companyId;
+      openInternal(c ? `ib://valuation/${c}` : 'ib://valuation');
+      break;
+    }
+    case 'research.export':
+      void exportResearch(undefined, 'markdown');
+      break;
+    case 'research.exportJson':
+      void exportResearch(undefined, 'json');
+      break;
+    case 'research.import':
+      void importResearch();
+      break;
+    case 'data.backup':
+      void backupData();
       break;
     case 'session.restore':
       restorePreviousSession();
@@ -524,6 +566,20 @@ function suggestions(query: string): Suggestion[] {
       : { kind: 'url', url: target.url, title: target.kind === 'internal' ? internalTitle(target.url) : displayUrl(target.url) },
   );
   const seen = new Set<string>([target.url]);
+  // Companies in your research come first when the query looks like a ticker or a name.
+  const bare = q.replace(/^\$/, '');
+  const companyHits = rankBy(companiesCache, bare, (c) => `${c.ticker ?? ''} ${c.name}`, 3).filter(
+    (c) => (c.ticker ?? '').startsWith(bare.toUpperCase()) || c.name.toLowerCase().includes(bare.toLowerCase()),
+  );
+  if (companyHits.length) {
+    const items: Suggestion[] = companyHits.map((c) => ({
+      kind: 'company',
+      url: `ib://company/${c.id}`,
+      title: `${c.ticker ? c.ticker + ' · ' : ''}${c.name}`,
+    }));
+    if (q.startsWith('$')) out.unshift(...items);
+    else out.push(...items);
+  }
   const snap = tabs.snapshot();
   const openTabs = rankBy(
     snap.tabs.filter((t) => t.id !== snap.activeTabId && !isInternalUrl(t.url)),
@@ -576,7 +632,7 @@ function registerIpc(): void {
   });
   handle('tabs:close', (a: { id: string }) => tabs.close(a.id));
   handle('tabs:activate', (a: { id: string }) => tabs.activate(a.id));
-  handle('tabs:navigate', (a: { id?: string; input: string }) => tabs.navigate(a.id, a.input));
+  handle('tabs:navigate', (a: { id?: string; input: string }) => tabs.navigate(a.id, resolveTickerInput(a.input)));
   handle('tabs:move', (a: { id: string; index: number }) => tabs.move(a.id, a.index));
   handle('tabs:pin', (a: { id: string; pinned: boolean }) => tabs.setPinned(a.id, a.pinned));
   handle('tabs:contextMenu', (a: { id: string }) => tabs.contextMenuForTab(a.id));
@@ -647,6 +703,7 @@ function registerIpc(): void {
     userDataPath: app.getPath('userData'),
     dbPath: store.path,
   }));
+  registerResearchIpc();
   handle('data:clear', async (a: { what: 'cache' | 'siteData' }) => {
     const ses = session.fromPartition(WEB_PARTITION);
     if (a.what === 'cache') {
@@ -685,4 +742,172 @@ function buildAppMenu(): void {
       { role: 'windowMenu' },
     ]),
   );
+}
+
+// ---------------------------------------------------------------- research
+
+function refreshCompanies(): void {
+  companiesCache = research.listCompanies();
+  send('companies', companiesCache);
+  tabs?.refreshInternalTitles();
+}
+
+function openSaveDraft(draft: SaveDraft): void {
+  if (!win) return;
+  win.webContents.focus();
+  send('saveDraft', draft);
+}
+
+/** "$MSFT" → the MSFT dossier when it exists in your research. */
+function resolveTickerInput(input: string): string {
+  const m = /^\$([A-Za-z0-9.\-]{1,10})$/.exec(input.trim());
+  if (!m) return input;
+  const ticker = normalizeTicker(m[1]!);
+  const hits = ticker ? companiesCache.filter((c) => c.ticker === ticker) : [];
+  if (hits.length >= 1) return `ib://company/${hits[0]!.id}`;
+  send('toast', { message: `${ticker ?? m[1]} no está en tu investigación. Créala en Investigación.`, kind: 'info' });
+  return 'ib://research';
+}
+
+/** Turn repository validation errors into clean messages for the UI. */
+function guarded<T>(fn: () => T): T {
+  try {
+    return fn();
+  } catch (err) {
+    if (err instanceof ValidationError) throw new Error(err.message);
+    if (err && typeof err === 'object' && 'issues' in err) throw new Error('Datos no válidos.');
+    throw err;
+  }
+}
+
+function notesChanged(companyId: number | null): void {
+  send('notesChanged', { companyId });
+  refreshCompanies();
+}
+
+function registerResearchIpc(): void {
+  handle('companies:list', () => companiesCache);
+  handle('companies:save', (a: CompanyInput) => {
+    const c = guarded(() => research.saveCompany(a));
+    refreshCompanies();
+    return c;
+  });
+  handle('companies:remove', async (a: { id: number }) => {
+    const c = companiesCache.find((x) => x.id === a.id);
+    if (!c || !win) return;
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'warning',
+      buttons: ['Eliminar', 'Cancelar'],
+      defaultId: 1,
+      cancelId: 1,
+      message: `¿Eliminar ${c.ticker ?? c.name} y toda su investigación?`,
+      detail: `Se borrarán ${c.noteCount} notas y sus fuentes. Las pestañas abiertas no se cierran. Puedes exportarla antes (Markdown o JSON).`,
+    });
+    if (response !== 0) return;
+    research.removeCompany(a.id);
+    notesChanged(a.id);
+  });
+  handle('companies:setPrice', (a: { id: number; price: number | null; currency?: string | null; asOf?: string | null; source?: string | null }) => {
+    research.setPrice(a.id, a);
+    refreshCompanies();
+  });
+  handle('tabs:setCompany', (a: { id: string; companyId: number | null }) => {
+    if (a.companyId !== null && !companiesCache.some((c) => c.id === a.companyId)) throw new Error('La empresa no existe.');
+    tabs.setCompany(a.id, a.companyId);
+  });
+  handle('workspace:close', (a: { companyId: number }) => {
+    const saved = tabs.closeCompanyTabs(a.companyId);
+    research.setSavedTabs(a.companyId, saved);
+    refreshCompanies();
+    send('toast', { message: `Espacio guardado: ${saved.length} pestaña(s).`, kind: 'info' });
+  });
+  handle('workspace:open', (a: { companyId: number }) => {
+    const open = tabs.tabsForCompany(a.companyId);
+    if (open.length) return tabs.activate(open[0]!.id);
+    const c = companiesCache.find((x) => x.id === a.companyId);
+    if (!c) return;
+    if (!c.savedTabs.length) {
+      tabs.create({ url: `ib://company/${c.id}` });
+      return;
+    }
+    c.savedTabs.forEach((t, i) => tabs.create({ url: t.url, title: t.title, companyId: c.id, active: i === 0, lazy: i !== 0 }));
+  });
+  handle('notes:list', (a: { companyId?: number; query?: string }) => research.listNotes(a.companyId, a.query));
+  handle('notes:add', (a: NoteInput) => {
+    const n = guarded(() => research.addNote(a));
+    notesChanged(n.companyId);
+    return n;
+  });
+  handle('notes:update', (a: { id: number; body?: string; resolved?: boolean }) => {
+    const companyId = guarded(() => research.updateNote(a.id, a));
+    notesChanged(companyId);
+  });
+  handle('notes:remove', (a: { id: number }) => notesChanged(research.removeNote(a.id)));
+  handle('sources:list', (a: { companyId: number }) => research.listSources(a.companyId));
+  handle('research:captureSelection', async () => {
+    const d = await tabs.captureSelection();
+    if (d) openSaveDraft({ ...d, kind: d.text ? 'snippet' : 'note' });
+  });
+  handle('research:export', (a: { companyId?: number; format: 'markdown' | 'json' }) => exportResearch(a.companyId, a.format));
+  handle('research:import', () => importResearch());
+  handle('data:backup', () => backupData());
+}
+
+async function exportResearch(companyId: number | undefined, format: 'markdown' | 'json'): Promise<void> {
+  if (!win) return;
+  const c = companyId ? companiesCache.find((x) => x.id === companyId) : undefined;
+  const base = c ? `investigacion-${(c.ticker ?? c.name).replace(/[^\w.-]+/g, '_')}` : 'investigacion';
+  const ext = format === 'json' ? 'json' : 'md';
+  const res = await dialog.showSaveDialog(win, {
+    title: 'Exportar investigación',
+    defaultPath: path.join(app.getPath('documents'), `${base}-${new Date().toISOString().slice(0, 10)}.${ext}`),
+    filters: [format === 'json' ? { name: 'JSON', extensions: ['json'] } : { name: 'Markdown', extensions: ['md'] }],
+  });
+  if (res.canceled || !res.filePath) return;
+  const body = format === 'json' ? JSON.stringify(research.exportJson(companyId), null, 2) : research.exportMarkdown(companyId);
+  writeFileSync(res.filePath, body, 'utf8');
+  send('toast', { message: 'Investigación exportada.', kind: 'info' });
+}
+
+async function importResearch(): Promise<void> {
+  if (!win) return;
+  const res = await dialog.showOpenDialog(win, {
+    title: 'Importar investigación',
+    filters: [{ name: 'Investigación (JSON)', extensions: ['json'] }],
+    properties: ['openFile'],
+  });
+  const file = res.filePaths[0];
+  if (res.canceled || !file) return;
+  try {
+    const raw = readFileSync(file, 'utf8');
+    if (raw.length > 50 * 1024 * 1024) throw new Error('Archivo demasiado grande');
+    const r = research.importJson(JSON.parse(raw));
+    notesChanged(null);
+    send('toast', {
+      message: `Importado: ${r.companies} empresa(s) nueva(s), ${r.notes} nota(s)${r.skipped ? `, ${r.skipped} omitida(s) por no ser válidas` : ''}.`,
+      kind: 'info',
+    });
+  } catch (err) {
+    logError('research.import', err);
+    send('toast', { message: 'El archivo no es una exportación válida de Investor Browser.', kind: 'error' });
+  }
+}
+
+/** Consistent snapshot of the whole database, safe while the app is running. */
+async function backupData(): Promise<void> {
+  if (!win) return;
+  const res = await dialog.showSaveDialog(win, {
+    title: 'Copia de seguridad',
+    defaultPath: path.join(app.getPath('documents'), `investor-browser-backup-${new Date().toISOString().slice(0, 10)}.db`),
+    filters: [{ name: 'Base de datos SQLite', extensions: ['db'] }],
+  });
+  if (res.canceled || !res.filePath) return;
+  try {
+    rmSync(res.filePath, { force: true }); // VACUUM INTO refuses to overwrite
+    store.db.prepare('VACUUM INTO ?').run(res.filePath);
+    send('toast', { message: 'Copia de seguridad creada.', kind: 'info' });
+  } catch (err) {
+    logError('backup', err);
+    send('toast', { message: 'No se pudo crear la copia de seguridad.', kind: 'error' });
+  }
 }

@@ -42,6 +42,7 @@ export function SettingsPage() {
             value={s.theme}
             options={[
               ['dark', 'Oscuro'],
+              ['terminal', 'Terminal'],
               ['light', 'Claro'],
               ['system', 'Sistema'],
             ]}
@@ -150,6 +151,24 @@ export function SettingsPage() {
               Exportar HTML
             </button>
           </div>
+        </Row>
+        <Row label="Investigación">
+          <div className="btn-row">
+            <button className="btn" onClick={() => runCommand('research.export')}>
+              Exportar Markdown
+            </button>
+            <button className="btn" onClick={() => runCommand('research.exportJson')}>
+              Exportar JSON
+            </button>
+            <button className="btn" onClick={() => runCommand('research.import')}>
+              Importar JSON
+            </button>
+          </div>
+        </Row>
+        <Row label="Copia de seguridad completa" hint="Un archivo .db con todo: ajustes, favoritos, historial e investigación">
+          <button className="btn" onClick={() => runCommand('data.backup')} data-testid="backup">
+            Crear copia…
+          </button>
         </Row>
         <Row label="Sesión">
           <button className="btn" onClick={() => runCommand('session.restore')}>

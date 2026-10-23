@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Command, Download, House, PanelLeft, PanelRight, RotateCw, Star, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookmarkPlus, Command, Download, House, PanelLeft, PanelRight, RotateCw, Star, X } from 'lucide-react';
 import { Omnibox } from './Omnibox';
 import { IconButton } from './ui';
 import { ib, isMac, runCommand, useActiveTab, useBookmarks, useDownloads, usePopups, useSettings, useToasts, updateSettings } from '../lib/ib';
@@ -66,6 +66,9 @@ export function TopBar({ addressRequest }: { addressRequest: number }) {
             <Star size={15} fill={bookmarked ? 'currentColor' : 'none'} />
           </IconButton>
         )}
+        <IconButton label="Guardar en investigación (Ctrl+Shift+S)" disabled={!isWeb} onClick={() => runCommand('research.save')} testId="save-research">
+          <BookmarkPlus size={15} />
+        </IconButton>
       </div>
 
       <div className="topbar-right">
@@ -106,7 +109,7 @@ export function TopBar({ addressRequest }: { addressRequest: number }) {
         )}
         {tb.rightPanel && (
           <IconButton
-            label="Panel de contexto"
+            label="Panel de investigación (Ctrl+.)"
             active={settings.rightPanelVisible}
             onClick={() => void updateSettings({ rightPanelVisible: !settings.rightPanelVisible })}
           >

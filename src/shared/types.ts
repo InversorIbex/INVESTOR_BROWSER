@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { NEW_TAB_URL } from './url';
 
 // ---------- Settings ----------
-export const ThemeSchema = z.enum(['system', 'dark', 'light']);
+/** 'terminal' = high-density black/amber theme for long research sessions. */
+export const ThemeSchema = z.enum(['system', 'dark', 'light', 'terminal']);
 export type Theme = z.infer<typeof ThemeSchema>;
 
 /**
@@ -106,6 +107,8 @@ export interface TabState {
   find: FindState | null;
   audible: boolean;
   muted: boolean;
+  /** Research workspace this tab belongs to, if any. */
+  companyId: number | null;
 }
 
 export interface BrowserSnapshot {
@@ -152,7 +155,7 @@ export interface SitePermission {
 }
 
 export interface Suggestion {
-  kind: 'history' | 'bookmark' | 'tab' | 'search' | 'url';
+  kind: 'history' | 'bookmark' | 'tab' | 'search' | 'url' | 'company';
   url: string;
   title: string;
   tabId?: string;
@@ -173,4 +176,79 @@ export interface AppInfo {
   platform: string;
   userDataPath: string;
   dbPath: string;
+}
+
+// ---------- Research ----------
+export const NOTE_KINDS = ['snippet', 'figure', 'note', 'conclusion', 'question'] as const;
+export type NoteKind = (typeof NOTE_KINDS)[number];
+export const NOTE_KIND_LABEL: Record<NoteKind, string> = {
+  snippet: 'Fragmento',
+  figure: 'Cifra',
+  note: 'Nota',
+  conclusion: 'Conclusión',
+  question: 'Pregunta',
+};
+export const SECTOR_KINDS = ['general', 'bank', 'insurer', 'reit'] as const;
+
+export interface Company {
+  id: number;
+  name: string;
+  ticker: string | null;
+  exchange: string;
+  country: string;
+  sector: string;
+  sectorKind: (typeof SECTOR_KINDS)[number];
+  irUrl: string | null;
+  cik: string | null;
+  color: string;
+  followed: boolean;
+  thesis: string;
+  price: number | null;
+  priceCurrency: string | null;
+  priceAsOf: string | null;
+  priceSource: string | null;
+  savedTabs: { url: string; title: string }[];
+  createdAt: number;
+  updatedAt: number;
+  noteCount: number;
+  openQuestions: number;
+}
+
+export interface Note {
+  id: number;
+  companyId: number;
+  kind: NoteKind;
+  body: string;
+  quote: string | null;
+  metric: string | null;
+  period: string | null;
+  value: number | null;
+  scale: string | null;
+  currency: string | null;
+  origin: 'published' | 'user' | 'estimate' | null;
+  resolved: boolean;
+  sourceId: number | null;
+  sourceUrl: string | null;
+  sourceTitle: string | null;
+  accessedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Source {
+  id: number;
+  companyId: number;
+  url: string;
+  title: string;
+  accessedAt: number;
+  noteCount: number;
+}
+
+/** Sent by main when the user asks to save something from a page. */
+export interface SaveDraft {
+  text: string;
+  url: string | null;
+  title: string | null;
+  companyId: number | null;
+  kind?: NoteKind;
 }

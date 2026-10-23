@@ -5,8 +5,13 @@
  */
 import { z } from 'zod';
 import { COMMAND_IDS, type CommandId } from './commands';
-import { SettingsPatchSchema } from './types';
+import { SettingsPatchSchema, NOTE_KINDS, SECTOR_KINDS } from './types';
+import { METRIC_IDS, SCALES, type Scale } from './finance';
 import type {
+  Company,
+  Note,
+  SaveDraft,
+  Source,
   AppInfo,
   Bookmark,
   BrowserSnapshot,
@@ -21,6 +26,44 @@ import type {
 const Id = z.string().min(1).max(64);
 const Text = (max: number) => z.string().max(max);
 const UrlText = Text(8192);
+const PosInt = z.number().int().positive().max(2_147_483_647);
+const Finite = z.number().finite();
+
+export const CompanyInputSchema = z
+  .object({
+    id: PosInt.optional(),
+    name: z.string().trim().min(1).max(200),
+    ticker: z.string().max(12).nullable().optional(),
+    exchange: Text(40).optional(),
+    country: Text(60).optional(),
+    sector: Text(80).optional(),
+    sectorKind: z.enum(SECTOR_KINDS).optional(),
+    irUrl: UrlText.nullable().optional(),
+    cik: z.string().regex(/^\d{1,10}$/).nullable().optional(),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+    followed: z.boolean().optional(),
+    thesis: Text(50_000).optional(),
+  })
+  .strict();
+export type CompanyInput = z.infer<typeof CompanyInputSchema>;
+
+export const NoteInputSchema = z
+  .object({
+    companyId: PosInt,
+    kind: z.enum(NOTE_KINDS),
+    body: Text(20_000).default(''),
+    quote: Text(20_000).nullable().optional(),
+    sourceUrl: UrlText.nullable().optional(),
+    sourceTitle: Text(1000).nullable().optional(),
+    metric: z.enum(METRIC_IDS).nullable().optional(),
+    period: Text(20).nullable().optional(),
+    value: Finite.nullable().optional(),
+    scale: z.enum(Object.keys(SCALES) as [Scale, ...Scale[]]).nullable().optional(),
+    currency: z.string().regex(/^[A-Z]{3}$/).nullable().optional(),
+    origin: z.enum(['published', 'user', 'estimate']).nullable().optional(),
+  })
+  .strict();
+export type NoteInput = z.input<typeof NoteInputSchema>;
 
 export const RequestSchemas = {
   'state:get': z.undefined(),
@@ -66,6 +109,33 @@ export const RequestSchemas = {
   'popups:dismiss': z.object({ id: Id }).strict(),
   'app:info': z.undefined(),
   'data:clear': z.object({ what: z.enum(['cache', 'siteData']) }).strict(),
+  'data:backup': z.undefined(),
+  // ---- research ----
+  'companies:list': z.undefined(),
+  'companies:save': CompanyInputSchema,
+  'companies:remove': z.object({ id: PosInt }).strict(),
+  'companies:setPrice': z
+    .object({
+      id: PosInt,
+      price: Finite.positive().nullable(),
+      currency: z.string().regex(/^[A-Z]{3}$/).nullable().optional(),
+      asOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+      source: Text(300).nullable().optional(),
+    })
+    .strict(),
+  'tabs:setCompany': z.object({ id: Id, companyId: PosInt.nullable() }).strict(),
+  'workspace:open': z.object({ companyId: PosInt }).strict(),
+  'workspace:close': z.object({ companyId: PosInt }).strict(),
+  'notes:list': z.object({ companyId: PosInt.optional(), query: Text(500).optional() }).strict(),
+  'notes:add': NoteInputSchema,
+  'notes:update': z
+    .object({ id: PosInt, body: Text(20_000).optional(), resolved: z.boolean().optional(), kind: z.enum(NOTE_KINDS).optional() })
+    .strict(),
+  'notes:remove': z.object({ id: PosInt }).strict(),
+  'sources:list': z.object({ companyId: PosInt }).strict(),
+  'research:captureSelection': z.undefined(),
+  'research:export': z.object({ companyId: PosInt.optional(), format: z.enum(['markdown', 'json']) }).strict(),
+  'research:import': z.undefined(),
 } as const;
 
 export type RequestChannel = keyof typeof RequestSchemas;
@@ -104,6 +174,22 @@ export interface ResponseMap {
   'popups:dismiss': void;
   'app:info': AppInfo;
   'data:clear': void;
+  'data:backup': void;
+  'companies:list': Company[];
+  'companies:save': Company;
+  'companies:remove': void;
+  'companies:setPrice': void;
+  'tabs:setCompany': void;
+  'workspace:open': void;
+  'workspace:close': void;
+  'notes:list': Note[];
+  'notes:add': Note;
+  'notes:update': void;
+  'notes:remove': void;
+  'sources:list': Source[];
+  'research:captureSelection': void;
+  'research:export': void;
+  'research:import': void;
 }
 
 export interface EventMap {
@@ -115,6 +201,9 @@ export interface EventMap {
   popup: PopupNotice[];
   resolvedTheme: 'dark' | 'light';
   toast: { message: string; kind: 'info' | 'error' };
+  companies: Company[];
+  notesChanged: { companyId: number | null };
+  saveDraft: SaveDraft;
 }
 export type EventChannel = keyof EventMap;
 export const EVENT_CHANNELS: readonly EventChannel[] = [
@@ -126,6 +215,9 @@ export const EVENT_CHANNELS: readonly EventChannel[] = [
   'popup',
   'resolvedTheme',
   'toast',
+  'companies',
+  'notesChanged',
+  'saveDraft',
 ];
 
 /** Shape of `window.ib` exposed by the preload to the trusted UI only. */

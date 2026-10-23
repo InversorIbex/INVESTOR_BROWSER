@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { AppWindow, Bookmark as BookmarkIcon, Clock, Globe, Lock, Search, TriangleAlert, LayoutGrid } from 'lucide-react';
-import { ib, useActiveTab, useOverlay } from '../lib/ib';
+import { AppWindow, BookOpen, Bookmark as BookmarkIcon, Clock, Globe, Landmark, Lock, Search, TriangleAlert, LayoutGrid } from 'lucide-react';
+import { ib, useActiveTab, useCompanies, useOverlay } from '../lib/ib';
+import { isOnIrSite, officialSourceFor } from '../../shared/sources';
 import { displayUrl, isInternalUrl, NEW_TAB_URL, securityStateOf } from '../../shared/url';
 import type { Suggestion } from '../../shared/types';
 
@@ -12,6 +13,7 @@ export function Omnibox({ focusRequest }: { focusRequest: number }) {
   const [items, setItems] = useState<Suggestion[]>([]);
   const [sel, setSel] = useState(0);
   const reqId = useRef(0);
+  const companies = useCompanies();
 
   const url = tab?.error?.url ?? tab?.url ?? '';
   const shownUrl = url === NEW_TAB_URL ? '' : url;
@@ -98,6 +100,7 @@ export function Omnibox({ focusRequest }: { focusRequest: number }) {
           }
         }}
       />
+      {!focused && !tab?.error && shownUrl && <TrustChips url={shownUrl} companies={companies} companyId={tab?.companyId ?? null} />}
       {tab?.zoom && Math.abs(tab.zoom - 1) > 0.001 ? (
         <span className="omni-chip" title="Nivel de zoom">{Math.round(tab.zoom * 100)}%</span>
       ) : null}
@@ -118,7 +121,7 @@ export function Omnibox({ focusRequest }: { focusRequest: number }) {
               <SuggestionIcon kind={s.kind} />
               <span className="omni-item-title">{s.kind === 'search' ? s.title : s.title || displayUrl(s.url)}</span>
               <span className="omni-item-sub">
-                {s.kind === 'search' ? 'Buscar' : s.kind === 'tab' ? 'Cambiar a pestaña' : displayUrl(s.url)}
+                {s.kind === 'search' ? 'Buscar' : s.kind === 'tab' ? 'Cambiar a pestaña' : s.kind === 'company' ? 'Abrir dossier' : displayUrl(s.url)}
               </span>
             </li>
           ))}
@@ -133,8 +136,35 @@ function displayUrlForBar(url: string): string {
   return isInternalUrl(url) ? url : displayUrl(url);
 }
 
+/**
+ * Investor trust signals. "Fuente oficial" appears only for an exact or true-subdomain
+ * match of a regulator/statistics host over HTTPS — lookalike domains never get it.
+ */
+function TrustChips({ url, companies, companyId }: { url: string; companies: ReturnType<typeof useCompanies>; companyId: number | null }) {
+  const official = officialSourceFor(url);
+  const ir = companies.find((c) => isOnIrSite(url, c.irUrl));
+  const linked = companyId ? companies.find((c) => c.id === companyId) : undefined;
+  const chip = linked ?? ir;
+  return (
+    <>
+      {official && (
+        <span className="omni-chip chip-official" title={`Dominio oficial verificado: ${official}`} data-testid="chip-official">
+          <Landmark size={11} /> {official}
+        </span>
+      )}
+      {chip && (
+        <span className="omni-chip chip-company" style={{ ['--chip' as string]: chip.color }} title={ir && ir.id === chip.id ? `Web de relaciones con inversores de ${chip.name}` : `Pestaña vinculada a ${chip.name}`} data-testid="chip-company">
+          {ir && ir.id === chip.id ? 'IR · ' : ''}
+          {chip.ticker ?? chip.name}
+        </span>
+      )}
+    </>
+  );
+}
+
 function SuggestionIcon({ kind }: { kind: Suggestion['kind'] }) {
   const size = 14;
+  if (kind === 'company') return <BookOpen size={size} className="accent" />;
   if (kind === 'search') return <Search size={size} className="muted" />;
   if (kind === 'bookmark') return <BookmarkIcon size={size} className="accent" />;
   if (kind === 'history') return <Clock size={size} className="muted" />;

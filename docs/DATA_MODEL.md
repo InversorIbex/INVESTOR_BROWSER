@@ -14,7 +14,9 @@ Base de datos local SQLite (`investor-browser.db`) con migraciones numeradas en 
 
 Los ajustes se validan campo a campo: un valor dañado vuelve a su valor por defecto sin tocar el resto.
 
-## v2 — Fase 2 (diseño)
+## v2 — Fase 2 (implementado; el SQL exacto está en `src/main/db.ts`)
+
+Diferencias con el diseño inicial: el espacio de trabajo se guarda en `companies.saved_tabs` (JSON), el precio manual en `companies.price*`, la tesis en `companies.thesis`, y las cifras viven en `notes` (`kind = 'figure'`, con `CHECK` que exige métrica, periodo, valor y escala). Diseño original:
 
 ```sql
 CREATE TABLE companies (

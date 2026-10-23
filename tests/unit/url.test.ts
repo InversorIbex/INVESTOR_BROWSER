@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyUrl, displayUrl, isSafeWebUrl, normalizeInput, parseInternal, redactUrl, securityStateOf } from '../../src/shared/url';
+import { classifyUrl, displayUrl, isSafeWebUrl, normalizeInput, parseInternal, parseInternalRoute, redactUrl, securityStateOf } from '../../src/shared/url';
 
 describe('normalizeInput', () => {
   it('keeps explicit http(s) URLs', () => {
@@ -64,6 +64,16 @@ describe('url safety', () => {
   it('parseInternal rejects lookalikes', () => {
     expect(parseInternal('ib://settings')).toBe('settings');
     expect(parseInternal('ib://settings/../x')).toBeNull();
+    expect(parseInternal('ib://settings/3')).toBeNull();
+  });
+
+  it('internal routes with ids', () => {
+    expect(parseInternalRoute('ib://company/12')).toEqual({ page: 'company', id: 12 });
+    expect(parseInternalRoute('ib://company')).toBeNull(); // id required
+    expect(parseInternalRoute('ib://valuation')).toEqual({ page: 'valuation', id: null });
+    expect(parseInternalRoute('ib://valuation/3')).toEqual({ page: 'valuation', id: 3 });
+    expect(parseInternalRoute('ib://company/1;drop')).toBeNull();
+    expect(normalizeInput('ib://company/7')).toEqual({ kind: 'internal', url: 'ib://company/7' });
   });
 
   it('redactUrl removes query strings and fragments before logging', () => {

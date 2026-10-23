@@ -26,7 +26,14 @@ El principio: **el contenido web es hostil**. Ninguna página puede alcanzar Nod
 10. **Descargas:** nombres saneados, nunca se sobrescriben archivos, aviso antes de abrir ejecutables.
 11. **Registros:** el logger no escribe URLs con parámetros, cookies, cabeceras ni contenido de formularios (`redactUrl`, `logError`).
 12. **Base de datos dañada:** no deja la app inutilizable; el usuario decide apartar el archivo (se renombra, no se borra).
-13. **User-Agent:** se elimina el token `Electron/x.y` para que las webs traten la app como Chrome. No afecta a la seguridad.
+13. **Investigación:**
+    - La selección para «Guardar en investigación» se obtiene del menú contextual de Chromium (proceso main) o con `executeJavaScriptInIsolatedWorld`: el código corre en un mundo aislado, la página no puede alterar `getSelection` ni ver ese código, y nunca se inyecta nada en el mundo de la página.
+    - Citas, notas y tesis se renderizan como texto con React (nunca `innerHTML`). Test E2E con `<script>` y `<img onerror>`.
+    - URLs de fuentes, web de inversores y pestañas guardadas: solo `http(s)`, validado en el repositorio (no solo en la UI).
+    - Importación JSON: tamaño máximo, esquema Zod campo a campo, transacción atómica y URLs peligrosas descartadas.
+    - El distintivo «Fuente oficial» exige HTTPS y dominio exacto o subdominio real (test con `sec.gov.evil.com` y `evilsec.gov`).
+    - No se hace ninguna petición de red nueva: los enlaces a EDGAR son solo enlaces.
+14. **User-Agent:** se elimina el token `Electron/x.y` para que las webs traten la app como Chrome. No afecta a la seguridad.
 
 ## Excepciones documentadas
 

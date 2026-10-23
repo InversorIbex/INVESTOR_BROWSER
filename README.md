@@ -4,7 +4,7 @@
 
 Navegador de escritorio de código abierto pensado para inversores fundamentales: navegación web real (Chromium), pestañas, favoritos, historial y descargas, sobre una base preparada para investigación de empresas con datos oficiales y gratuitos.
 
-**Estado: v0.1.0 — Fase 1 (navegador funcional) completada.** Las herramientas de investigación (espacios por empresa, cuaderno con fuentes, SEC EDGAR) llegan en las fases 2–3. Consulta [docs/ROADMAP.md](docs/ROADMAP.md).
+**Estado: v0.2.0 — navegador funcional + investigación por empresa + laboratorio de valoración.** Los datos automáticos de SEC EDGAR llegan en la Fase 3. Consulta [docs/ROADMAP.md](docs/ROADMAP.md).
 
 *English: Open-source desktop browser for fundamental investors. Phase 1 (a real, secure Chromium-based browser) is complete; research workspaces and official-data tools are next. Docs are in Spanish; code and comments are in English.*
 
@@ -14,11 +14,15 @@ Navegador de escritorio de código abierto pensado para inversores fundamentales
 
 | Área | Funciones |
 | --- | --- |
+| **Investigación** | Empresas (ticker + bolsa), espacios de trabajo por empresa, «Guardar en investigación» desde cualquier página o PDF (cita + URL + fecha), cifras con métrica/periodo/unidad, preguntas y conclusiones, tesis, exportar/importar |
+| **Dossier** | Cifras por periodo en una unidad, origen de cada dato, FCL y deuda neta con fórmula, márgenes, conversión en caja, precio manual fechado, enlaces a 10-K/10-Q/8-K/Form 4 |
+| **Valoración** | Múltiplos con motivos cuando no aplican, ajustes para bancos/aseguradoras/REITs, DCF en 3 escenarios, sensibilidad, peso del valor terminal |
+| **Confianza** | Distintivo «Fuente oficial» (reguladores y estadística, solo HTTPS) e «IR · TICKER»; `$TICKER` abre el dossier |
 | Navegación | Barra de direcciones con búsqueda (DuckDuckGo, Google, Bing, Brave, Startpage), sugerencias de historial/favoritos/pestañas, atrás/adelante/recargar/detener, zoom, imprimir, buscar en la página, herramientas de desarrollo |
 | Pestañas | Verticales (estilo Arc) u horizontales, fijar, duplicar, reordenar arrastrando, silenciar, reabrir cerradas (`Ctrl+Shift+T`), `Ctrl+1…9`, menú contextual |
 | Sesión | Restauración automática al iniciar (carga diferida de pestañas en segundo plano) y «Restaurar sesión anterior» |
 | Biblioteca | Favoritos con carpetas, importar/exportar HTML (Chrome, Edge, Firefox…), historial agrupado por día con búsqueda y borrado por rango, descargas con progreso, pausa y reanudación |
-| Interfaz | Paleta de comandos `Ctrl+K`, tema oscuro/claro/sistema, tamaño de letra, panel lateral redimensionable, panel de contexto, modo foco (`F11` / `Ctrl+\`), barra configurable |
+| Interfaz | Paleta de comandos `Ctrl+K`, temas oscuro, **Terminal**, claro y sistema, tamaño de letra, panel lateral redimensionable, panel de contexto, modo foco (`F11` / `Ctrl+\`), barra configurable |
 | Seguridad | Pestañas en sandbox sin acceso a Node ni al puente IPC, IPC validado con esquemas, bloqueo de esquemas peligrosos, permisos por sitio, certificados inválidos bloqueados, sin `<webview>` |
 | Privacidad | Todo local (SQLite), sin telemetría, historial desactivable, borrar caché/cookies |
 

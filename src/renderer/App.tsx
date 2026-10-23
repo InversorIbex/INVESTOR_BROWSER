@@ -5,7 +5,8 @@ import { TabStrip } from './components/TabStrip';
 import { ContentArea } from './components/ContentArea';
 import { CommandPalette } from './components/CommandPalette';
 import { RightPanel } from './components/RightPanel';
-import { showToast, updateSettings, useCommandListener, useResolvedTheme, useSettings } from './lib/ib';
+import { showToast, updateSettings, useCommandListener, useResolvedTheme, useSaveDraft, useSettings } from './lib/ib';
+import { SaveDialog } from './components/SaveDialog';
 import type { CommandId } from '../shared/commands';
 
 export function App() {
@@ -13,6 +14,7 @@ export function App() {
   const systemTheme = useResolvedTheme();
   // Explicit choices come straight from settings; only "system" depends on the OS.
   const theme = settings.theme === 'system' ? systemTheme : settings.theme;
+  const draft = useSaveDraft();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [findRequest, setFindRequest] = useState(0);
@@ -64,6 +66,7 @@ export function App() {
         {showRight && <RightPanel width={settings.rightPanelWidth} />}
       </div>
       {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
+      {draft && !paletteOpen && <SaveDialog key={`${draft.url}-${draft.text.length}-${draft.kind}`} draft={draft} />}
     </div>
   );
 }

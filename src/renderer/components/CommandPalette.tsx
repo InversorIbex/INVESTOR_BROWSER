@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Bookmark as BookmarkIcon, Clock, CornerDownLeft, LayoutGrid, Search, Terminal } from 'lucide-react';
+import { ArrowRight, BookOpen, Bookmark as BookmarkIcon, Clock, CornerDownLeft, LayoutGrid, Search, Terminal } from 'lucide-react';
 import { Favicon, Kbd } from './ui';
-import { ib, runCommand, useBookmarks, useBrowser, useOverlay } from '../lib/ib';
+import { ib, runCommand, useBookmarks, useBrowser, useCompanies, useOverlay } from '../lib/ib';
 import { COMMANDS, COMMAND_IDS, type CommandId } from '../../shared/commands';
 import { fuzzyScore, rankBy } from '../../shared/fuzzy';
 import { displayUrl, isInternalUrl } from '../../shared/url';
@@ -16,6 +16,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   useOverlay(true);
   const { tabs, activeTabId } = useBrowser();
   const bookmarks = useBookmarks();
+  const companies = useCompanies();
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(0);
   const [remote, setRemote] = useState<Suggestion[]>([]);
@@ -43,7 +44,9 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     const openTabs: Item[] = tabs
       .filter((t) => t.id !== activeTabId)
       .map((t) => ({ type: 'tab', tabId: t.id, title: t.title || 'Sin título', url: t.url, favicon: t.favicon }));
-    if (!q.trim()) return [...openTabs.slice(0, 6), ...commands];
+    const companyItems: Item[] = companies.map((c) => ({ type: 'link', kind: 'company', title: `${c.ticker ? c.ticker + ' — ' : ''}${c.name}`, url: `ib://company/${c.id}` }));
+    if (!q.trim()) return [...companyItems.slice(0, 5), ...openTabs.slice(0, 6), ...commands];
+    const rankedCompanies = rankBy(companyItems, q.replace(/^\$/, ''), (c) => (c as { title: string }).title, 4);
 
     const rankedCmds = rankBy(commands, q, (c) => `${c.title} ${(c as { group: string }).group}`, 8);
     const rankedTabs = rankBy(openTabs, q, (t) => `${t.title} ${displayUrl((t as { url: string }).url)}`, 5);
@@ -59,9 +62,9 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     const best = rankedCmds[0] ? fuzzyScore(q, (rankedCmds[0] as { title: string }).title) : 0;
     const commandFirst = best >= 600 && nav[0]?.kind !== 'url';
     return commandFirst
-      ? [...rankedCmds, ...rankedTabs, ...navItems, ...linkItems]
-      : [...navItems, ...rankedTabs, ...rankedCmds, ...linkItems];
-  }, [q, tabs, activeTabId, bookmarks, remote]);
+      ? [...rankedCompanies, ...rankedCmds, ...rankedTabs, ...navItems, ...linkItems]
+      : [...rankedCompanies, ...navItems, ...rankedTabs, ...rankedCmds, ...linkItems];
+  }, [q, tabs, activeTabId, bookmarks, remote, companies]);
 
   useEffect(() => setSel(0), [q]);
   useEffect(() => {
@@ -114,7 +117,8 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         <div className="palette-list" ref={listRef}>
           {items.length === 0 && <div className="palette-empty">Sin resultados</div>}
           {items.map((item, i) => {
-            const group = item.type === 'command' ? item.group : item.type === 'tab' ? 'Pestañas abiertas' : item.kind === 'search' || item.kind === 'url' ? 'Ir' : 'Favoritos e historial';
+            const group =
+              item.type === 'command' ? item.group : item.type === 'tab' ? 'Pestañas abiertas' : item.kind === 'company' ? 'Empresas' : item.kind === 'search' || item.kind === 'url' ? 'Ir' : 'Favoritos e historial';
             const header = group !== lastGroup ? <div className="palette-group">{group}</div> : null;
             lastGroup = group;
             return (
@@ -146,6 +150,7 @@ function PaletteIcon({ item }: { item: Item }) {
   if (item.type === 'command') return <Terminal size={14} className="muted" />;
   if (item.type === 'tab') return item.favicon ? <Favicon src={item.favicon} url={item.url} size={14} /> : <LayoutGrid size={14} className="muted" />;
   if (item.kind === 'search') return <Search size={14} className="muted" />;
+  if (item.kind === 'company') return <BookOpen size={14} className="accent" />;
   if (item.kind === 'bookmark') return <BookmarkIcon size={14} className="accent" />;
   if (item.kind === 'history') return <Clock size={14} className="muted" />;
   return <ArrowRight size={14} className="muted" />;

@@ -3,8 +3,15 @@
  * can be unit-tested in plain Node.
  */
 
-export type InternalPage = 'newtab' | 'history' | 'bookmarks' | 'downloads' | 'settings';
-export const INTERNAL_PAGES: readonly InternalPage[] = ['newtab', 'history', 'bookmarks', 'downloads', 'settings'];
+export type InternalPage = 'newtab' | 'history' | 'bookmarks' | 'downloads' | 'settings' | 'research' | 'company' | 'valuation';
+export const INTERNAL_PAGES: readonly InternalPage[] = ['newtab', 'history', 'bookmarks', 'downloads', 'settings', 'research', 'company', 'valuation'];
+/** Pages that take a numeric id: required for company, optional for valuation. */
+const ID_PAGES: Record<string, 'required' | 'optional'> = { company: 'required', valuation: 'optional' };
+
+export interface InternalRoute {
+  page: InternalPage;
+  id: number | null;
+}
 export const NEW_TAB_URL = 'ib://newtab';
 
 export interface SearchEngine {
@@ -31,11 +38,24 @@ export function isInternalUrl(url: string): boolean {
   return parseInternal(url) !== null;
 }
 
-export function parseInternal(url: string): InternalPage | null {
-  const m = /^ib:\/\/([a-z]+)\/?$/i.exec(url.trim());
+export function parseInternalRoute(url: string): InternalRoute | null {
+  const m = /^ib:\/\/([a-z]+)(?:\/(\d{1,9}))?\/?$/i.exec(url.trim());
   if (!m) return null;
   const page = m[1]!.toLowerCase() as InternalPage;
-  return INTERNAL_PAGES.includes(page) ? page : null;
+  if (!INTERNAL_PAGES.includes(page)) return null;
+  const id = m[2] ? Number(m[2]) : null;
+  const rule = ID_PAGES[page];
+  if (rule === 'required' && !id) return null;
+  if (!rule && id !== null) return null;
+  return { page, id };
+}
+
+export function parseInternal(url: string): InternalPage | null {
+  return parseInternalRoute(url)?.page ?? null;
+}
+
+export function internalUrl(route: InternalRoute): string {
+  return `ib://${route.page}${route.id ? '/' + route.id : ''}`;
 }
 
 /** Only these may be loaded inside a web tab. */
@@ -79,8 +99,8 @@ export function normalizeInput(raw: string, engineId = 'duckduckgo'): Normalized
   const asSearch = (): NormalizedInput => ({ kind: 'search', url: searchUrl(engineId, input), query: input });
   if (!input) return { kind: 'internal', url: NEW_TAB_URL };
 
-  const internal = parseInternal(input);
-  if (internal) return { kind: 'internal', url: `ib://${internal}` };
+  const internal = parseInternalRoute(input);
+  if (internal) return { kind: 'internal', url: internalUrl(internal) };
   if (input === 'about:blank') return { kind: 'url', url: input };
 
   if (/\s/.test(input)) return asSearch();

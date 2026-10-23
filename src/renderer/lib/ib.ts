@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { EventChannel, EventMap, IbApi } from '../../shared/ipc';
 import type { CommandId } from '../../shared/commands';
-import type { Bookmark, BrowserSnapshot, DownloadItemState, PopupNotice, Settings } from '../../shared/types';
+import type { Bookmark, BrowserSnapshot, Company, DownloadItemState, PopupNotice, SaveDraft, Settings } from '../../shared/types';
 import { DEFAULT_SETTINGS } from '../../shared/types';
 
 declare global {
@@ -40,6 +40,7 @@ const settingsStore = channelStore('settings', structuredClone(DEFAULT_SETTINGS)
 const bookmarksStore = channelStore('bookmarks', [] as Bookmark[], () => ib.invoke('bookmarks:list'));
 const downloadsStore = channelStore('downloads', [] as DownloadItemState[], () => ib.invoke('downloads:list'));
 const popupStore = channelStore('popup', [] as PopupNotice[]);
+const companiesStore = channelStore('companies', [] as Company[], () => ib.invoke('companies:list'));
 const themeStore = channelStore(
   'resolvedTheme',
   (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') as 'dark' | 'light',
@@ -53,6 +54,51 @@ export const useBookmarks = () => use(bookmarksStore);
 export const useDownloads = () => use(downloadsStore);
 export const usePopups = () => use(popupStore);
 export const useResolvedTheme = () => use(themeStore);
+export const useCompanies = () => use(companiesStore);
+export function useCompany(id: number | null | undefined): Company | null {
+  const list = useCompanies();
+  return id ? (list.find((c) => c.id === id) ?? null) : null;
+}
+
+// ---------- notes revision: bump when any note changes so views refetch ----------
+let notesRev = 0;
+const notesListeners = new Set<() => void>();
+ib.on('notesChanged', () => {
+  notesRev++;
+  notesListeners.forEach((l) => l());
+});
+export const useNotesRevision = () =>
+  useSyncExternalStore(
+    (l) => {
+      notesListeners.add(l);
+      return () => notesListeners.delete(l);
+    },
+    () => notesRev,
+  );
+
+// ---------- "save to research" dialog ----------
+let draft: SaveDraft | null = null;
+const draftListeners = new Set<() => void>();
+export function openSaveDialog(d: SaveDraft | null): void {
+  draft = d;
+  draftListeners.forEach((l) => l());
+}
+ib.on('saveDraft', (d) => openSaveDialog(d));
+export const useSaveDraft = () =>
+  useSyncExternalStore(
+    (l) => {
+      draftListeners.add(l);
+      return () => draftListeners.delete(l);
+    },
+    () => draft,
+  );
+
+/** Electron wraps errors thrown in main: "Error invoking remote method 'x': Error: message". */
+export function errorMessage(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  const i = msg.lastIndexOf('Error: ');
+  return i >= 0 ? msg.slice(i + 7) : msg;
+}
 
 export function useActiveTab() {
   const s = useBrowser();

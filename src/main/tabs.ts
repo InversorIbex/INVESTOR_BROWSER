@@ -10,8 +10,9 @@
  */
 import { clipboard, Menu, WebContentsView, type BrowserWindow, type MenuItemConstructorOptions, type Rectangle, type WebContents } from 'electron';
 import type { Store } from './db';
-import { classifyUrl, isInternalUrl, isSafeWebUrl, NEW_TAB_URL, normalizeInput, searchUrl, SEARCH_ENGINES } from '../shared/url';
-import type { BrowserSnapshot, Settings, TabError, TabState } from '../shared/types';
+import { classifyUrl, isInternalUrl, isSafeWebUrl, NEW_TAB_URL, normalizeInput, parseInternalRoute, searchUrl, SEARCH_ENGINES } from '../shared/url';
+import type { BrowserSnapshot, Company, SaveDraft, Settings, TabError, TabState } from '../shared/types';
+import { parseFigure } from '../shared/finance';
 import type { CommandId, KeyInput } from '../shared/commands';
 import { logError } from './log';
 
@@ -48,6 +49,8 @@ export interface TabsDeps {
   openExternalWithConsent(url: string): void;
   focusAddressBar(): void;
   runCommand(id: CommandId): void;
+  companies(): Company[];
+  saveDraft(draft: SaveDraft): void;
 }
 
 export class TabManager {
@@ -90,18 +93,22 @@ export class TabManager {
   sessionTabs() {
     const tabs = this.tabs
       .filter((t) => isSafeWebUrl(t.url) || isInternalUrl(t.url))
-      .map((t) => ({ url: t.error?.url ?? t.url, title: t.title, pinned: t.pinned }));
+      .map((t) => ({ url: t.error?.url ?? t.url, title: t.title, pinned: t.pinned, companyId: t.companyId }));
     const activeIndex = Math.max(0, this.tabs.findIndex((t) => t.id === this.activeId));
     return { tabs, activeIndex: Math.min(activeIndex, Math.max(0, tabs.length - 1)), savedAt: Date.now() };
   }
 
   // ---------------- lifecycle ----------------
-  create(opts: { url?: string; active?: boolean; index?: number; pinned?: boolean; title?: string; lazy?: boolean } = {}): string {
+  create(
+    opts: { url?: string; active?: boolean; index?: number; pinned?: boolean; title?: string; lazy?: boolean; companyId?: number | null } = {},
+  ): string {
     const url = opts.url && (isSafeWebUrl(opts.url) || isInternalUrl(opts.url)) ? opts.url : NEW_TAB_URL;
+    const route = parseInternalRoute(url);
+    const companyId = route?.page === 'company' ? route.id : (opts.companyId ?? null);
     const tab: Tab = {
       id: `t${++this.counter}`,
       url,
-      title: opts.title ?? (isInternalUrl(url) ? internalTitle(url) : url),
+      title: isInternalUrl(url) ? this.internalTitleFor(url) : (opts.title ?? url),
       favicon: null,
       pinned: !!opts.pinned,
       loading: false,
@@ -114,6 +121,7 @@ export class TabManager {
       muted: false,
       view: null,
       pendingLoad: false,
+      companyId: companyId && this.deps.companies().some((c) => c.id === companyId) ? companyId : null,
     };
     const index = opts.index ?? this.insertionIndex(tab.pinned);
     this.tabs.splice(Math.min(index, this.tabs.length), 0, tab);
@@ -224,7 +232,9 @@ export class TabManager {
     if (target.kind === 'internal') {
       this.destroyView(tab);
       tab.url = target.url;
-      tab.title = internalTitle(target.url);
+      tab.title = this.internalTitleFor(target.url);
+      const route = parseInternalRoute(target.url);
+      if (route?.page === 'company') tab.companyId = route.id;
       tab.favicon = null;
       tab.loading = false;
       tab.canGoBack = tab.canGoForward = false;
@@ -319,6 +329,96 @@ export class TabManager {
     this.deps.changed();
   }
 
+  // ---------------- research ----------------
+  setCompany(id: string, companyId: number | null): void {
+    const tab = this.get(id);
+    if (!tab) return;
+    tab.companyId = companyId;
+    this.deps.changed();
+  }
+
+  tabsForCompany(companyId: number): TabState[] {
+    return this.tabs.filter((t) => t.companyId === companyId).map(toState);
+  }
+
+  /** Close every tab of a company and return the web pages so the workspace can be saved. */
+  closeCompanyTabs(companyId: number): { url: string; title: string }[] {
+    const own = this.tabs.filter((t) => t.companyId === companyId);
+    const saved = own
+      .map((t) => ({ url: t.error?.url ?? t.url, title: t.title }))
+      .filter((t) => isSafeWebUrl(t.url) && t.url !== 'about:blank');
+    for (const t of own) this.close(t.id);
+    return saved;
+  }
+
+  /** Refresh titles of internal pages after a company is renamed or deleted. */
+  refreshInternalTitles(): void {
+    const ids = new Set(this.deps.companies().map((c) => c.id));
+    for (const t of this.tabs) {
+      if (t.companyId !== null && !ids.has(t.companyId)) t.companyId = null;
+      if (isInternalUrl(t.url)) t.title = this.internalTitleFor(t.url);
+    }
+    this.deps.changed();
+  }
+
+  /**
+   * Read the current text selection of the active page from an isolated JS world:
+   * page scripts cannot tamper with the getSelection used here, and nothing is
+   * written into the page.
+   */
+  async captureSelection(): Promise<SaveDraft | null> {
+    const tab = this.active;
+    if (!tab) return null;
+    const web = !!tab.view && isSafeWebUrl(tab.url) && !tab.error;
+    let text = '';
+    if (web) {
+      try {
+        const res = await tab.view!.webContents.executeJavaScriptInIsolatedWorld(1001, [
+          { code: 'String(window.getSelection ? window.getSelection() : "").slice(0, 20000)' },
+        ]);
+        text = typeof res === 'string' ? res : '';
+      } catch {
+        text = ''; // e.g. PDF viewer: the user can still paste the quote by hand
+      }
+    }
+    return {
+      text: text.trim(),
+      url: web ? tab.url : null,
+      title: web ? tab.title : null,
+      companyId: tab.companyId ?? this.companyForUrl(tab.url),
+    };
+  }
+
+  private companyForUrl(url: string): number | null {
+    const host = (() => {
+      try {
+        return new URL(url).hostname.replace(/^www\./, '');
+      } catch {
+        return '';
+      }
+    })();
+    if (!host) return null;
+    const match = this.deps.companies().find((c) => {
+      if (!c.irUrl) return false;
+      try {
+        const ir = new URL(c.irUrl).hostname.replace(/^www\./, '');
+        return host === ir || host.endsWith('.' + ir);
+      } catch {
+        return false;
+      }
+    });
+    return match?.id ?? null;
+  }
+
+  private internalTitleFor(url: string): string {
+    const route = parseInternalRoute(url);
+    if (route?.page === 'company' && route.id) {
+      const c = this.deps.companies().find((x) => x.id === route.id);
+      return c ? `${c.ticker ? c.ticker + ' · ' : ''}${c.name}` : 'Empresa eliminada';
+    }
+    return internalTitle(url);
+  }
+
   // ---------------- layout ----------------
   setBounds(b: Rectangle): void {
     this.bounds = {
@@ -377,6 +477,19 @@ export class TabManager {
         click: () => this.toggleMute(tab.id),
       },
       { label: 'Copiar URL', enabled: !isInternalUrl(tab.url), click: () => clipboard.writeText(tab.error?.url ?? tab.url) },
+      { type: 'separator' },
+      {
+        label: 'Vincular a empresa',
+        submenu: this.deps.companies().length
+          ? this.deps.companies().map((c) => ({
+              label: `${c.ticker ? c.ticker + ' — ' : ''}${c.name}`,
+              type: 'radio' as const,
+              checked: tab.companyId === c.id,
+              click: () => this.setCompany(tab.id, c.id),
+            }))
+          : [{ label: 'Aún no hay empresas — créalas en Investigación', enabled: false }],
+      },
+      { label: 'Desvincular de la empresa', enabled: tab.companyId !== null, click: () => this.setCompany(tab.id, null) },
       { type: 'separator' },
       { label: 'Cerrar pestaña', click: () => this.close(tab.id) },
       {
@@ -558,7 +671,7 @@ export class TabManager {
             },
           };
         }
-        this.create({ url, active: disposition !== 'background-tab', index: this.tabs.indexOf(tab) + 1 });
+        this.create({ url, active: disposition !== 'background-tab', index: this.tabs.indexOf(tab) + 1, companyId: tab.companyId });
       } else if (kind === 'mailto' || kind === 'tel') {
         this.deps.openExternalWithConsent(url);
       }
@@ -587,11 +700,14 @@ export class TabManager {
     const items: MenuItemConstructorOptions[] = [];
     const sep = () => items.length && items[items.length - 1]!.type !== 'separator' && items.push({ type: 'separator' });
     const index = this.tabs.indexOf(tab) + 1;
+    const inherit = { companyId: tab.companyId };
+    const pageUrl = tab.url;
+    const draftBase = { url: isSafeWebUrl(pageUrl) ? pageUrl : null, title: tab.title, companyId: tab.companyId ?? this.companyForUrl(pageUrl) };
 
     if (params.linkURL && isSafeWebUrl(params.linkURL)) {
       items.push(
-        { label: 'Abrir enlace en pestaña nueva', click: () => this.create({ url: params.linkURL, index }) },
-        { label: 'Abrir enlace en segundo plano', click: () => this.create({ url: params.linkURL, index, active: false }) },
+        { label: 'Abrir enlace en pestaña nueva', click: () => this.create({ url: params.linkURL, index, ...inherit }) },
+        { label: 'Abrir enlace en segundo plano', click: () => this.create({ url: params.linkURL, index, active: false, ...inherit }) },
         { label: 'Copiar dirección del enlace', click: () => clipboard.writeText(params.linkURL) },
       );
       sep();
@@ -623,8 +739,11 @@ export class TabManager {
       const preview = text.length > 28 ? text.slice(0, 28) + '…' : text;
       items.push(
         { label: 'Copiar', role: 'copy' },
-        { label: `Buscar «${preview}» en ${engine.name}`, click: () => this.create({ url: searchUrl(engineId, text), index }) },
+        { label: 'Guardar en investigación…', accelerator: 'CmdOrCtrl+Shift+S', click: () => this.deps.saveDraft({ ...draftBase, text: text.slice(0, 20_000), kind: 'snippet' }) },
       );
+      if (parseFigure(text) && text.length < 200)
+        items.push({ label: 'Guardar como cifra…', click: () => this.deps.saveDraft({ ...draftBase, text, kind: 'figure' }) });
+      items.push({ label: `Buscar «${preview}» en ${engine.name}`, click: () => this.create({ url: searchUrl(engineId, text), index }) });
       sep();
     }
     if (!params.isEditable && !params.linkURL && params.mediaType === 'none') {
@@ -635,6 +754,8 @@ export class TabManager {
         { type: 'separator' },
         { label: 'Seleccionar todo', role: 'selectAll' },
         { label: 'Imprimir…', click: () => wc.print() },
+        { type: 'separator' },
+        { label: 'Guardar página en investigación…', click: () => this.deps.saveDraft({ ...draftBase, text: '', kind: 'note' }) },
       );
       sep();
     }
@@ -660,6 +781,8 @@ export function internalTitle(url: string): string {
     'ib://bookmarks': 'Favoritos',
     'ib://downloads': 'Descargas',
     'ib://settings': 'Ajustes',
+    'ib://research': 'Investigación',
   };
+  if (url.startsWith('ib://valuation')) return 'Valoración';
   return map[url] ?? 'Investor Browser';
 }

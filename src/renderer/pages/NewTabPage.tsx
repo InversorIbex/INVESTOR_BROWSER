@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Landmark, Search } from 'lucide-react';
+import { BookOpen, Calculator, CircleHelp, Landmark, Plus, Search } from 'lucide-react';
 import { BrandMark, LetterAvatar } from '../components/ui';
-import { ib, useBookmarks } from '../lib/ib';
+import { ib, runCommand, useBookmarks, useCompanies } from '../lib/ib';
+import { TickerChip, relativeDate } from '../components/research';
 import { BRAND } from '../../shared/brand';
 import { displayUrl, hostOf } from '../../shared/url';
 import type { HistoryEntry } from '../../shared/types';
@@ -18,6 +19,7 @@ const OFFICIAL_SOURCES = [
 
 export function NewTabPage() {
   const bookmarks = useBookmarks();
+  const companies = useCompanies();
   const [recent, setRecent] = useState<HistoryEntry[]>([]);
   const [q, setQ] = useState('');
 
@@ -47,9 +49,54 @@ export function NewTabPage() {
           }}
         >
           <Search size={16} className="muted" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar en la web o escribir una dirección" data-testid="newtab-search" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar, escribir una dirección o $TICKER" data-testid="newtab-search" />
         </form>
+        <div className="nt-actions">
+          <button className="nt-action" onClick={() => runCommand('open.research')}>
+            <BookOpen size={14} /> Investigación
+          </button>
+          <button className="nt-action" onClick={() => runCommand('open.valuation')}>
+            <Calculator size={14} /> Valoración
+          </button>
+          <button className="nt-action" onClick={() => runCommand('ui.palette')}>
+            <Search size={14} /> Comandos <kbd className="kbd">Ctrl K</kbd>
+          </button>
+        </div>
       </div>
+
+      <section className="nt-section">
+        <h2>
+          <BookOpen size={14} /> Tu investigación
+        </h2>
+        {companies.length === 0 ? (
+          <button className="nt-empty" onClick={() => runCommand('open.research')}>
+            <Plus size={16} />
+            <span>
+              <strong>Crea tu primera empresa</strong>
+              <span className="muted">Agrupa pestañas, guarda citas y cifras con su fuente y valora con tus propios supuestos.</span>
+            </span>
+          </button>
+        ) : (
+          <div className="nt-companies">
+            {companies.slice(0, 8).map((c) => (
+              <button key={c.id} className="nt-company" onClick={() => void ib.invoke('tabs:navigate', { input: `ib://company/${c.id}` })} data-testid="nt-company">
+                <div className="nt-company-top">
+                  <TickerChip company={c} />
+                  {c.openQuestions > 0 && (
+                    <span className="warn-text small">
+                      <CircleHelp size={12} /> {c.openQuestions}
+                    </span>
+                  )}
+                </div>
+                <span className="nt-company-name ellipsis">{c.name}</span>
+                <span className="muted small">
+                  {c.noteCount} notas · {relativeDate(c.updatedAt)}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
 
       {bookmarks.length > 0 && (
         <section className="nt-section">

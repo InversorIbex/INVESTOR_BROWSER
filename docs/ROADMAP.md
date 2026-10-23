@@ -21,11 +21,21 @@ Entorno, versiones, arquitectura ([ARCHITECTURE.md](ARCHITECTURE.md)), fuentes (
 | Seguridad: aislamiento, IPC validado, esquemas bloqueados | ✅ | E2E + unit |
 | Instalador Windows | ⚠️ Configurado; compilado en CI (`windows-latest`). **No probado en una máquina Windows real** por el autor de esta versión. Sin firmar. |
 
-## Fase 2 — Research Workspace (siguiente)
+## Fase 2 — Research Workspace ✅ (v0.2.0)
 
-Empresas (con ticker + bolsa para distinguir homónimos), espacios de trabajo que guardan y restauran pestañas, cuaderno (fragmento seleccionado → nota con URL, título y fecha de consulta), fuentes, exportación (JSON + Markdown) y copia de seguridad/restauración del archivo de datos. Botón «Guardar en investigación» en la barra.
+| Criterio | Estado | Verificación |
+| --- | --- | --- |
+| Crear empresa (homónimos por bolsa) | ✅ | Unit + E2E «flujo de investigación» |
+| Vincular pestañas, heredar en enlaces, guardar/abrir espacio | ✅ | E2E |
+| Guardar selección con URL, título y fecha | ✅ | E2E (mundo aislado + menú contextual + atajo) |
+| Cifras con métrica, periodo y unidad; derivadas con fórmula | ✅ | Unit + E2E |
+| Persistencia tras reiniciar | ✅ | E2E |
+| Exportar e importar en perfil vacío | ✅ | Unit (ida y vuelta) |
+| Contenido hostil mostrado como texto | ✅ | E2E |
 
-**Aceptación:** crear empresa, vincular pestañas, guardar 3 tipos de nota con fuente, reiniciar y recuperar todo; exportar e importar en un perfil vacío.
+## Fase 4 (adelantada en parte) — Valuation Lab ✅ básico
+
+Múltiplos, DCF con escenarios y sensibilidad, adaptación sectorial; DCF contrastado con cálculo a mano en tests. Pendiente: comparación histórica de múltiplos (necesita cotizaciones históricas legítimas).
 
 ## Fase 3 — Datos SEC EDGAR
 
@@ -54,3 +64,5 @@ Firma de código, actualizaciones firmadas, fuses de Electron, pruebas en Window
 | Cambios de condiciones de fuentes de datos | Medio | Fecha de verificación por proveedor; degradación a «no disponible» |
 | Ventanas emergentes de inicio de sesión que dependen de `window.opener` | Bajo | Se permiten como ventanas sandbox; bloqueables en Ajustes |
 | Atajos de teclado en distribuciones donde `Ctrl+\` requiere AltGr (teclado español) | Bajo | Alternativa `F11` |
+| Enlaces de EDGAR por ticker | Medio | Generados con el formato documentado de `browse-edgar`; **no verificados en vivo** desde el entorno de desarrollo (sin acceso a sec.gov). Si se indica el CIK se usa el CIK. |
+| Interpretación de cifras copiadas | Medio | Siempre es una sugerencia editable; separadores ambiguos se marcan; nunca se guarda sin confirmación del usuario |
