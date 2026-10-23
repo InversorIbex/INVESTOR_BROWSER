@@ -1,96 +1,350 @@
-# Investor Browser
+<div align="center">
 
-> *Everything an investor needs to research a stock, without leaving the browser.*
+<img src="docs/assets/banner.svg" alt="Investor Browser — el navegador para el inversor fundamental" width="100%">
 
-Navegador de escritorio de código abierto pensado para inversores fundamentales: navegación web real (Chromium), pestañas, favoritos, historial y descargas, sobre una base preparada para investigación de empresas con datos oficiales y gratuitos.
+<br>
 
-**Estado: v0.2.0 — navegador funcional + investigación por empresa + laboratorio de valoración.** Los datos automáticos de SEC EDGAR llegan en la Fase 3. Consulta [docs/ROADMAP.md](docs/ROADMAP.md).
+**Abre el informe anual. Selecciona la cifra. Guárdala con su fuente. Valora la empresa.**<br>
+Sin salir del navegador, sin suscripciones y sin que tus datos salgan de tu equipo.
 
-*English: Open-source desktop browser for fundamental investors. Phase 1 (a real, secure Chromium-based browser) is complete; research workspaces and official-data tools are next. Docs are in Spanish; code and comments are in English.*
+<br>
+
+[![Licencia Apache-2.0](https://img.shields.io/badge/licencia-Apache--2.0-5b8cff?style=flat-square)](LICENSE)
+[![Electron 44](https://img.shields.io/badge/Electron-44%20·%20Chromium%20152-47848f?style=flat-square&logo=electron&logoColor=white)](docs/ARCHITECTURE.md)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](tsconfig.json)
+[![Pruebas](https://img.shields.io/badge/pruebas-79%20unit%20·%206%20E2E-3fb68b?style=flat-square)](#-calidad-y-pruebas)
+[![Coste de datos](https://img.shields.io/badge/coste%20de%20datos-0%20€-3fb68b?style=flat-square)](docs/DATA_SOURCES.md)
+[![Telemetría](https://img.shields.io/badge/telemetría-ninguna-e3a13b?style=flat-square)](PRIVACY.md)
+[![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078d4?style=flat-square&logo=windows&logoColor=white)](#-instalación)
+
+[**Qué hace**](#-qué-hace) · [**Capturas**](#-en-imágenes) · [**Instalación**](#-instalación) · [**Seguridad**](#-seguridad-primero) · [**Hoja de ruta**](#-hoja-de-ruta) · [**Contribuir**](CONTRIBUTING.md)
+
+</div>
 
 ---
 
-## Qué funciona hoy
+## 💡 Por qué existe
 
-| Área | Funciones |
-| --- | --- |
-| **Investigación** | Empresas (ticker + bolsa), espacios de trabajo por empresa, «Guardar en investigación» desde cualquier página o PDF (cita + URL + fecha), cifras con métrica/periodo/unidad, preguntas y conclusiones, tesis, exportar/importar |
-| **Dossier** | Cifras por periodo en una unidad, origen de cada dato, FCL y deuda neta con fórmula, márgenes, conversión en caja, precio manual fechado, enlaces a 10-K/10-Q/8-K/Form 4 |
-| **Valoración** | Múltiplos con motivos cuando no aplican, ajustes para bancos/aseguradoras/REITs, DCF en 3 escenarios, sensibilidad, peso del valor terminal |
-| **Confianza** | Distintivo «Fuente oficial» (reguladores y estadística, solo HTTPS) e «IR · TICKER»; `$TICKER` abre el dossier |
-| Navegación | Barra de direcciones con búsqueda (DuckDuckGo, Google, Bing, Brave, Startpage), sugerencias de historial/favoritos/pestañas, atrás/adelante/recargar/detener, zoom, imprimir, buscar en la página, herramientas de desarrollo |
-| Pestañas | Verticales (estilo Arc) u horizontales, fijar, duplicar, reordenar arrastrando, silenciar, reabrir cerradas (`Ctrl+Shift+T`), `Ctrl+1…9`, menú contextual |
-| Sesión | Restauración automática al iniciar (carga diferida de pestañas en segundo plano) y «Restaurar sesión anterior» |
-| Biblioteca | Favoritos con carpetas, importar/exportar HTML (Chrome, Edge, Firefox…), historial agrupado por día con búsqueda y borrado por rango, descargas con progreso, pausa y reanudación |
-| Interfaz | Paleta de comandos `Ctrl+K`, temas oscuro, **Terminal**, claro y sistema, tamaño de letra, panel lateral redimensionable, panel de contexto, modo foco (`F11` / `Ctrl+\`), barra configurable |
-| Seguridad | Pestañas en sandbox sin acceso a Node ni al puente IPC, IPC validado con esquemas, bloqueo de esquemas peligrosos, permisos por sitio, certificados inválidos bloqueados, sin `<webview>` |
-| Privacidad | Todo local (SQLite), sin telemetría, historial desactivable, borrar caché/cookies |
+Investigar una empresa hoy significa tener **diez pestañas, cinco hojas de cálculo y cuatro herramientas** que no se hablan entre sí. Copias una cifra del 10-K a una hoja, pierdes de dónde salió, y tres meses después ya no sabes si ese «flujo de caja libre» era el publicado o uno que calculaste tú.
 
-## Requisitos
+**Investor Browser es un navegador real (Chromium) diseñado alrededor del flujo de trabajo del inversor fundamental:**
 
-- Node.js **22.12 o superior** (probado con 22.22) y npm 10.
-- Windows 10/11 x64 (objetivo principal), Linux x64 o macOS para desarrollo.
-- No se necesita ninguna clave de API ni servicio de pago.
+> Cada cifra sabe de dónde viene. Cada cálculo enseña su fórmula. Cada conclusión queda junto a la empresa.
 
-## Instalación para desarrollo
+<table>
+<tr>
+<td width="33%" valign="top">
 
-```bash
-git clone https://github.com/your-user/investor-browser.git
-cd investor-browser
-npm install          # descarga Electron (~100 MB)
-npm run dev          # Vite + recarga del proceso principal + Electron
+### 🔎 Investiga
+Navega por webs de inversores, informes en PDF y presentaciones con pestañas agrupadas por empresa.
+
+</td>
+<td width="33%" valign="top">
+
+### 📌 Cita la fuente
+Selecciona texto o una cifra, clic derecho y queda guardada **con URL, título y fecha de consulta**.
+
+</td>
+<td width="33%" valign="top">
+
+### 🧮 Valora
+Múltiplos, DCF en tres escenarios y sensibilidad, con tus cifras y **el origen de cada dato a la vista**.
+
+</td>
+</tr>
+</table>
+
+---
+
+## ✨ Qué hace
+
+### 🗂️ Espacios de investigación por empresa
+- Crea empresas con **ticker + bolsa** (las homónimas en distintos mercados son empresas distintas), país, sector, web de relaciones con inversores y CIK de la SEC.
+- **Pestañas vinculadas**: llevan el color y el ticker de su empresa en la barra lateral. Los enlaces que abres desde ellas heredan la empresa.
+- **Guardar y cerrar espacio** cuando terminas; **Abrir espacio** y todo vuelve donde lo dejaste.
+
+### 📌 Cuaderno con procedencia
+- **Clic derecho → «Guardar en investigación…»**, `Ctrl+Shift+S` o el botón del panel lateral. Funciona en webs y en **PDF**.
+- Cinco tipos de entrada: **fragmento**, **cifra**, **nota**, **conclusión** y **pregunta** (con «marcar como resuelta»).
+- **«Guardar como cifra…»** interpreta números copiados de informes (`$245,122 million`, `1.234,5 M€`, `(12,345)`, `€2,3 mil millones`) y **avisa si el separador es ambiguo**. Nunca guarda sin tu confirmación.
+
+### 📊 Dossier de empresa
+- **Cifras clave por periodo** en una sola unidad («millones de USD»), con un punto que indica su origen:
+  `🟢 publicado` · `🔵 cálculo propio` · `⚪ introducido por ti` · `🟠 estimación`.
+- **FCL** (FCO − CAPEX) y **deuda neta** derivados automáticamente, **con la fórmula y las cifras de origen** al pasar el ratón.
+- Márgenes bruto, operativo, neto y de FCL, y **conversión en caja** (FCO / beneficio neto).
+- **Los huecos se quedan en «—», nunca en cero.** Un dato publicado siempre gana a un cálculo propio.
+- **Precio manual** con fecha y fuente. Si no lo introduces: *«Cotización no disponible»*. Sin datos retrasados disfrazados de tiempo real.
+- **Tesis de inversión** con autoguardado, **preguntas pendientes**, **fuentes consultadas** y enlaces directos a **10-K, 10-Q, 8-K, Form 4 y 20-F** en SEC EDGAR.
+
+### 🧮 Laboratorio de valoración
+- **PER, EV/EBIT, EV/EBITDA, P/FCL, rentabilidad FCL y por dividendo**, cada uno con su fórmula.
+- Cuando un múltiplo no tiene sentido (beneficio negativo, faltan datos) **te dice por qué** en lugar de mostrar un número absurdo.
+- **Ajustes sectoriales**: bancos, aseguradoras y REIT/SOCIMI ocultan métricas que no aplican y explican cuáles usar.
+- **DCF en tres escenarios** (pesimista, base y optimista) editables, **peso del valor terminal** con aviso si supera el 75 % y **tabla de sensibilidad** coloreada frente al precio.
+- **«Cargar cifras guardadas»** rellena los datos desde el dossier indicando el origen de cada uno, y puedes guardar el resultado como conclusión.
+
+### 🛡️ Señales de confianza
+- Distintivo **«Fuente oficial»** en la barra de direcciones para SEC, CNMV, ESMA, BCE, Banco de España, FRED, Eurostat, INE, BaFin, AMF… Exige **HTTPS y dominio exacto**: `sec.gov.evil.com` no lo consigue.
+- Chip **«IR · MSFT»** cuando estás en la web de inversores de una de tus empresas, con propuesta de vincular la pestaña.
+- Escribe **`$MSFT`** en la barra de direcciones y vas directo al dossier.
+
+### 🌐 Un navegador completo
+Pestañas verticales (estilo Arc) u horizontales, fijadas, reordenables y reabribles · restauración de sesión con carga diferida · favoritos con importación/exportación desde Chrome, Edge y Firefox · historial por días · descargas con pausa y reanudación · buscar en la página · zoom · visor de PDF integrado · permisos por sitio · **paleta de comandos `Ctrl+K`** · modo foco.
+
+### 🎨 Tres temas pensados para leer durante horas
+**Grafito** (oscuro, por defecto) · **Terminal** (negro y ámbar, denso, para sesiones largas) · **Claro**, o el del sistema.
+
+---
+
+## 📸 En imágenes
+
+> Capturas reales de la aplicación. La empresa y las cifras son **ficticias**, creadas solo para la demostración.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/dossier-oscuro.png" alt="Dossier de empresa en tema oscuro"><br><sub><b>Dossier</b> · cifras por periodo con origen, panel de investigación y fuentes primarias</sub></td>
+<td width="50%"><img src="docs/screenshots/dossier-terminal.png" alt="Dossier en tema Terminal"><br><sub><b>Tema Terminal</b> · negro y ámbar, alta densidad</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/guardar-cita.png" alt="Guardar una cita con su fuente"><br><sub><b>Guardar en investigación</b> · la cita conserva URL, título y fecha</sub></td>
+<td width="50%"><img src="docs/screenshots/valoracion.png" alt="Laboratorio de valoración"><br><sub><b>Valoración</b> · cada dato muestra de dónde viene</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/paleta.png" alt="Paleta de comandos"><br><sub><b>Paleta de comandos</b> · <code>Ctrl+K</code> para todo</sub></td>
+<td width="50%"><img src="docs/screenshots/pdf-informe.png" alt="Informe PDF dentro de una pestaña"><br><sub><b>Informes en PDF</b> · abiertos dentro de la pestaña, listos para citar</sub></td>
+</tr>
+</table>
+
+---
+
+## 🔁 Un flujo de trabajo típico
+
+```mermaid
+flowchart LR
+    A["🔎 $MSFT<br/>o web de inversores"] --> B["📑 Abre 10-K,<br/>presentación, noticias"]
+    B --> C["🖱️ Selecciona texto<br/>o una cifra"]
+    C --> D["📌 Guardar en investigación<br/>URL + título + fecha"]
+    D --> E["📊 Dossier<br/>cifras con origen,<br/>FCL calculado con fórmula"]
+    E --> F["🧮 Valoración<br/>múltiplos + DCF<br/>+ sensibilidad"]
+    F --> G["🏁 Conclusión<br/>guardada en la empresa"]
+    G -. "meses después" .-> H["📂 Abrir espacio:<br/>todo vuelve"]
 ```
 
-`npm start` compila y arranca la versión de producción sin servidor de desarrollo.
+---
 
-## Pruebas
+## 🧭 Principios innegociables
 
-```bash
-npm run typecheck    # TypeScript estricto
-npm test             # pruebas unitarias (Vitest)
-npm run test:e2e     # pruebas E2E: lanza Electron real y navega un servidor local
-npm run test:all     # todo lo anterior
+| | Principio | Cómo se cumple |
+|---|---|---|
+| 💶 | **Coste de datos: 0 €** | Ninguna función obligatoria usa APIs de pago. Fuentes previstas: SEC EDGAR, FRED, Treasury, Eurostat ([evaluación](docs/DATA_SOURCES.md)). |
+| 🧾 | **Ninguna cifra inventada** | Huecos en «—», nunca 0. Cada valor muestra si es publicado, calculado, tuyo o estimado. |
+| 🕒 | **Nada retrasado se presenta como actual** | El precio es manual con fecha y fuente; sin él, «Cotización no disponible». |
+| 🔒 | **Tus datos son tuyos** | Todo en SQLite local. Sin telemetría, sin cuentas, sin sincronización. |
+| 🧑‍⚖️ | **Ayuda a pensar, no decide por ti** | Las fórmulas están a la vista; ninguna puntuación opaca. No es asesoramiento financiero. |
+
+---
+
+## 🛡️ Seguridad primero
+
+Las páginas web se tratan como **hostiles por defecto**. Ninguna puede tocar Node, el disco, la base de datos ni el puente interno de la aplicación.
+
+```mermaid
+flowchart TB
+    subgraph main["Proceso principal · único con acceso a disco y SQLite"]
+        DB[("SQLite local")]
+        IPC{{"IPC validado con Zod<br/>+ comprobación de remitente"}}
+    end
+    subgraph ui["Interfaz de confianza · sandbox · CSP estricta"]
+        UIX["React<br/>solo ve window.ib"]
+    end
+    subgraph web["Cada pestaña · sandbox · sin preload · sesión aislada"]
+        P1["Web / PDF"]
+    end
+    UIX <--> IPC
+    IPC <--> DB
+    P1 -. "✖ sin acceso" .- IPC
 ```
 
-Las pruebas E2E no dependen de Internet: levantan un servidor HTTP local con páginas de prueba. En Linux sin pantalla, ejecútalas con `xvfb-run -a npm run test:e2e`. Chromium **no** admite su sandbox ejecutándose como `root`; usa un usuario normal (ver [CONTRIBUTING.md](CONTRIBUTING.md)).
+- **Sandbox de Chromium en todos los procesos**, `contextIsolation` activo, `nodeIntegration` desactivado y **cero preload en las pestañas**.
+- **IPC con esquemas Zod** y verificación de remitente en cada canal. Las cargas inválidas se rechazan (cubierto por tests).
+- Solo `http(s)` en pestañas. **`javascript:`, `file:`, `data:`… bloqueados**; `mailto:` y `tel:` solo con tu confirmación.
+- La selección para guardar se lee en un **mundo JavaScript aislado**: la página no puede falsearla ni recibe código.
+- Citas y notas se muestran **siempre como texto**. Un test E2E intenta colar `<script>` e `<img onerror>`.
+- **Certificados inválidos bloqueados sin opción de «continuar de todos modos»**, permisos por sitio denegados por defecto, `<webview>` prohibido y descargas que nunca sobrescriben.
+- Los registros no guardan URLs con parámetros, cookies ni formularios.
 
-## Compilar el instalador
+📖 Detalle completo: [Modelo de seguridad](docs/SECURITY_MODEL.md) · Informar de una vulnerabilidad: [SECURITY.md](SECURITY.md)
+
+---
+
+## 🚀 Instalación
+
+### Desde el código (Windows, macOS o Linux)
 
 ```bash
-npm run dist:win     # Windows x64 → release/Investor-Browser-Setup-<versión>-x64.exe (NSIS)
-npm run dist:linux   # Linux → AppImage
-npm run dist:dir     # solo la carpeta desempaquetada, para inspección
+git clone https://github.com/InversorIbex/INVESTOR_BROWSER.git
+cd INVESTOR_BROWSER
+npm install
+npm run dev        # modo desarrollo con recarga
 ```
 
-- El instalador de Windows debe compilarse **en Windows** (o en Linux con `wine`). El flujo de GitHub Actions lo compila en `windows-latest` y lo publica como artefacto.
-- **El instalador no está firmado.** Windows SmartScreen mostrará un aviso hasta que el proyecto disponga de un certificado de firma de código. Ver [SECURITY.md](SECURITY.md).
-- La desinstalación elimina el programa y los accesos directos, pero **conserva tus datos** (`%APPDATA%\Investor Browser`) para no destruir tu investigación por accidente. Bórralos a mano si quieres una limpieza total.
+Requisitos: **Node.js ≥ 22.12** y npm 10. No hace falta ninguna clave de API.
 
-## Dónde se guardan los datos
+### Instalador para Windows 10/11 (x64)
 
-| Sistema | Ruta |
-| --- | --- |
-| Windows | `%APPDATA%\Investor Browser\` |
-| Linux | `~/.config/Investor Browser/` |
-| macOS | `~/Library/Application Support/Investor Browser/` |
+```bash
+npm run dist:win   # → release/Investor-Browser-Setup-<versión>-x64.exe
+```
 
-La base de datos es `investor-browser.db` (SQLite). Ajustes › Acerca de muestra la ruta exacta. Para un perfil portátil o de pruebas: `IB_USER_DATA=/ruta/perfil npm start`.
+También lo genera automáticamente [GitHub Actions](.github/workflows/ci.yml) en `windows-latest` como artefacto descargable, con su SHA-256.
 
-## Cambiar el nombre y la marca
+> [!WARNING]
+> El instalador **todavía no está firmado digitalmente**: Windows SmartScreen mostrará un aviso. La firma de código y las actualizaciones automáticas firmadas están previstas antes de la v1.0. Al desinstalar, **tu investigación se conserva** en `%APPDATA%\Investor Browser`.
 
-1. `src/shared/brand.ts` — nombre, eslogan, color de acento.
-2. `package.json` — `productName` y `build.appId`.
-3. `python3 scripts/make-icons.py "#HEXCOLOR"` — regenera `build/icon.png` e `icon.ico` (requiere Pillow).
-4. `--accent` en `src/renderer/styles/app.css` si cambias el color.
+### Otros comandos
 
-## Documentación
+| Comando | Qué hace |
+|---|---|
+| `npm start` | Compila y arranca la versión de producción |
+| `npm run dist:linux` | Genera un AppImage |
+| `npm run typecheck` | TypeScript estricto |
+| `npm test` | Pruebas unitarias |
+| `npm run test:e2e` | Pruebas E2E con Electron real |
 
-- [Arquitectura](docs/ARCHITECTURE.md) · [Modelo de seguridad](docs/SECURITY_MODEL.md) · [Modelo de datos](docs/DATA_MODEL.md)
-- [Fuentes de datos gratuitas](docs/DATA_SOURCES.md) · [Hoja de ruta y criterios de aceptación](docs/ROADMAP.md)
-- [Privacidad](PRIVACY.md) · [Seguridad](SECURITY.md) · [Contribuir](CONTRIBUTING.md) · [Cambios](CHANGELOG.md) · [Licencias de terceros](THIRD_PARTY_LICENSES.md)
+---
 
-## Licencia
+## ⌨️ Atajos esenciales
 
-[Apache-2.0](LICENSE). Permite uso, modificación y distribución (también comercial) siempre que se conserven el aviso de copyright y la licencia, se indiquen los cambios relevantes, e incluye una concesión explícita de patentes de los contribuidores. No concede derechos sobre la marca. Ver la sección «Licencia» de [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#licencia) para el razonamiento.
+| Atajo | Acción | | Atajo | Acción |
+|---|---|---|---|---|
+| `Ctrl+K` | Paleta de comandos | | `Ctrl+Shift+S` | Guardar selección en investigación |
+| `Ctrl+L` | Barra de direcciones | | `Ctrl+Shift+E` | Empresas e investigación |
+| `Ctrl+T` / `Ctrl+W` | Nueva / cerrar pestaña | | `Ctrl+.` | Panel de investigación |
+| `Ctrl+Shift+T` | Reabrir pestaña cerrada | | `Ctrl+F` | Buscar en la página |
+| `Ctrl+1…9` | Ir a la pestaña | | `F11` / `Ctrl+\` | Modo foco |
+| `Ctrl+D` | Añadir a favoritos | | `$TICKER` + `Enter` | Abrir el dossier |
 
-> Investor Browser es una herramienta de investigación. No es asesoramiento financiero y no ejecuta operaciones bursátiles.
+Todos los atajos aparecen en **Ajustes › Atajos de teclado** y en la paleta.
+
+---
+
+## 🧱 Arquitectura
+
+| Capa | Tecnología | Por qué |
+|---|---|---|
+| Escritorio | **Electron 44** (Chromium 152, Node 24) | Navegación real, una `WebContentsView` aislada por pestaña |
+| Interfaz | **React 19 + TypeScript** estricto | Componentes simples, sin framework de estado |
+| Datos | **SQLite integrado** (`node:sqlite`) | Sin módulos nativos que recompilar; migraciones versionadas |
+| Validación | **Zod** | Un único contrato compartido entre UI y proceso principal |
+| Build | **Vite + esbuild** | Rápido y sin capas extra |
+| Pruebas | **Vitest + Playwright** | Lógica pura en unitarias; navegador real en E2E |
+
+```
+src/
+├── shared/    lógica pura y testeable: URLs, finanzas, valoración, fuentes, IPC
+├── main/      proceso principal: pestañas, seguridad, SQLite, investigación
+├── preload/   puente mínimo para la UI (window.ib)
+└── renderer/  interfaz React: componentes, páginas ib://, estilos
+```
+
+📖 [Arquitectura](docs/ARCHITECTURE.md) · [Modelo de datos](docs/DATA_MODEL.md) · [Fuentes de datos](docs/DATA_SOURCES.md)
+
+---
+
+## ✅ Calidad y pruebas
+
+- **79 pruebas unitarias**, entre ellas:
+  - interpretación de cifras en formatos de EE. UU. y Europa;
+  - DCF contrastado con un cálculo a mano;
+  - rechazo de dominios impostores;
+  - exportar e importar ida y vuelta;
+  - regresiones de ajustes y empresas.
+- **6 pruebas E2E con Electron real** contra un servidor local, sin depender de Internet:
+  - navegación, pestañas, atrás/adelante, búsqueda y errores;
+  - persistencia tras reiniciar y descargas;
+  - paleta de comandos;
+  - flujo de investigación completo;
+  - contenido hostil que debe mostrarse como texto.
+- **CI en Linux y Windows**: typecheck, pruebas, E2E y generación del instalador.
+
+---
+
+## 🗺️ Hoja de ruta
+
+- [x] **Fase 1** · Navegador funcional, seguro y persistente
+- [x] **Fase 2** · Espacios de investigación, cuaderno con procedencia, dossier, exportación
+- [x] **Fase 4 (parcial)** · Laboratorio de valoración: múltiplos, DCF, sensibilidad
+- [ ] **Fase 3** · Cifras automáticas desde **SEC EDGAR** (XBRL), con caché, límite de 10 peticiones/s y procedencia por cifra
+- [ ] **Fase 4** · Quality Compounder Analyzer · Financial Forensics · Cross-Tab Research · Insider Tracker (Form 4) · Crash Replay
+- [ ] **Fase 5** · Investment Copilot **opcional**: sin IA por defecto, con consentimiento antes de enviar nada
+- [ ] **Fase 6** · Firma de código, actualizaciones firmadas, pruebas en Windows 10 y 11 reales
+
+Criterios de aceptación y riesgos: [docs/ROADMAP.md](docs/ROADMAP.md) · Cambios: [CHANGELOG.md](CHANGELOG.md)
+
+---
+
+## ❓ Preguntas frecuentes
+
+<details>
+<summary><b>¿Muestra cotizaciones en tiempo real?</b></summary>
+
+No. No existe una fuente gratuita, fiable y con condiciones que lo permitan. El precio se introduce a mano con su fecha y fuente, y se usa así en los cálculos. Nunca se presenta un dato retrasado como actual.
+</details>
+
+<details>
+<summary><b>¿Mis notas se suben a algún sitio?</b></summary>
+
+No. Todo vive en una base de datos SQLite en tu equipo. Puedes exportarlo a Markdown o JSON y crear copias de seguridad completas desde Ajustes.
+</details>
+
+<details>
+<summary><b>¿Sirve para empresas europeas o españolas?</b></summary>
+
+Sí. El cuaderno, el dossier y la valoración funcionan con cualquier empresa y moneda, y entienden formatos como `1.234,5 M€`. Los enlaces a EDGAR solo aplican a emisores registrados en la SEC. La CNMV, ESMA y los reguladores europeos aparecen como fuente oficial.
+</details>
+
+<details>
+<summary><b>¿Puedo cambiar el nombre y la marca?</b></summary>
+
+Sí: edita `src/shared/brand.ts`, `productName` en `package.json` y regenera los iconos con `python3 scripts/make-icons.py "#COLOR"`.
+</details>
+
+---
+
+## 🤝 Contribuir
+
+¡Bienvenidas las contribuciones! Antes de nada, lee [CONTRIBUTING.md](CONTRIBUTING.md). Hay cuatro reglas de oro:
+
+1. **Seguridad antes que funciones.**
+2. **Datos honestos.**
+3. **Coste cero.**
+4. **Pequeño y mantenible.**
+
+Para proponer una nueva fuente de datos usa la [plantilla específica](.github/ISSUE_TEMPLATE/data_source.md), con su licencia y sus límites.
+
+---
+
+<details>
+<summary><b>🇬🇧 English summary</b></summary>
+
+**Investor Browser** is an open-source, security-first desktop browser (Electron/Chromium) built for fundamental stock investors:
+
+- **Research workspaces per company:** tabs are grouped by ticker and can be saved and restored.
+- **Provenance-aware notebook:** right-click any selection on a web page or PDF to save it with its URL, title and access date. Figures copied from reports are parsed with ambiguity warnings.
+- **Company dossier:** shows each figure's origin (published / own calculation / user / estimate) and derives FCF and net debt with visible formulas. Gaps are never filled with zeros.
+- **Valuation lab:** multiples with reasons when they don't apply, sector adjustments, a 3-scenario DCF and a sensitivity grid.
+- **Trust signals:** official-source badges for regulator domains (HTTPS and exact host only) and an IR badge on a company's investor-relations site.
+
+It has zero data cost and no telemetry, and all data stays on your machine. Docs are in Spanish; code and comments are in English. Licensed under Apache-2.0.
+</details>
+
+<div align="center">
+
+<br>
+
+**Licencia [Apache-2.0](LICENSE)** · Hecho para inversores que leen las cuentas.
+
+<sub>Investor Browser es una herramienta de investigación. No es asesoramiento financiero y no ejecuta operaciones bursátiles.</sub>
+
+</div>

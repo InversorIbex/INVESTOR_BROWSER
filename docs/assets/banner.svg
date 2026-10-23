@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 360" width="1280" height="360" role="img" aria-label="Investor Browser — el navegador para inversores fundamentales">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b0d10"/>
+      <stop offset="1" stop-color="#11161f"/>
+    </linearGradient>
+    <linearGradient id="line" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5b8cff" stop-opacity="0"/>
+      <stop offset="0.35" stop-color="#5b8cff"/>
+      <stop offset="1" stop-color="#3fb68b"/>
+    </linearGradient>
+    <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5b8cff" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#5b8cff" stop-opacity="0"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#ffffff" stroke-opacity="0.04"/>
+    </pattern>
+  </defs>
+  <rect width="1280" height="360" rx="20" fill="url(#bg)"/>
+  <rect width="1280" height="360" rx="20" fill="url(#grid)"/>
+
+  <!-- illustrative chart line (decorative, not data) -->
+  <path d="M560 300 L620 284 L670 292 L720 250 L770 262 L820 214 L870 228 L920 176 L970 190 L1020 132 L1070 148 L1120 96 L1180 78 L1240 54 L1240 360 L560 360 Z" fill="url(#area)"/>
+  <path d="M560 300 L620 284 L670 292 L720 250 L770 262 L820 214 L870 228 L920 176 L970 190 L1020 132 L1070 148 L1120 96 L1180 78 L1240 54" fill="none" stroke="url(#line)" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <circle cx="1240" cy="54" r="6" fill="#3fb68b"/>
+  <circle cx="1240" cy="54" r="14" fill="#3fb68b" fill-opacity="0.18"/>
+
+  <!-- brand mark -->
+  <g transform="translate(72 84)">
+    <rect width="64" height="64" rx="16" fill="#5b8cff"/>
+    <path d="M12 43 L25 30 L35 38 L51 20" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="51" cy="20" r="4.6" fill="#fff"/>
+  </g>
+  <text x="156" y="128" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="46" font-weight="700" fill="#e6e8eb" letter-spacing="-1">Investor Browser</text>
+
+  <text x="72" y="202" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="25" fill="#b4bac4">El navegador para el inversor fundamental.</text>
+  <text x="72" y="238" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif" font-size="19" fill="#7d8592">Investiga, cita la fuente, valora. Todo local. Coste de datos: 0 €.</text>
+
+  <!-- pills -->
+  <g font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="14" font-weight="700">
+    <g transform="translate(72 274)">
+      <rect width="84" height="30" rx="6" fill="#5b8cff" fill-opacity="0.15" stroke="#5b8cff" stroke-opacity="0.45"/>
+      <text x="42" y="20" text-anchor="middle" fill="#7ea4ff">$MSFT</text>
+    </g>
+    <g transform="translate(168 274)">
+      <rect width="148" height="30" rx="6" fill="#3fb68b" fill-opacity="0.14" stroke="#3fb68b" stroke-opacity="0.45"/>
+      <text x="74" y="20" text-anchor="middle" fill="#55d1a2">FUENTE OFICIAL</text>
+    </g>
+    <g transform="translate(328 274)">
+      <rect width="96" height="30" rx="6" fill="#ffb000" fill-opacity="0.13" stroke="#ffb000" stroke-opacity="0.45"/>
+      <text x="48" y="20" text-anchor="middle" fill="#ffc340">DCF · 3×</text>
+    </g>
+  </g>
+</svg>

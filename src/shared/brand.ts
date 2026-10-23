@@ -10,5 +10,5 @@ export const BRAND = {
   accent: '#5B8CFF',
   /** Scheme used for the browser's own internal pages (never served to web content). */
   internalScheme: 'ib',
-  repoUrl: 'https://github.com/your-user/investor-browser',
+  repoUrl: 'https://github.com/InversorIbex/INVESTOR_BROWSER',
 } as const;

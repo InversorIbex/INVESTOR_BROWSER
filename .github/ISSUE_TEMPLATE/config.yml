@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: Vulnerabilidad de seguridad
-    url: https://github.com/your-user/investor-browser/security/advisories/new
+    url: https://github.com/InversorIbex/INVESTOR_BROWSER/security/advisories/new
     about: Informa de forma privada, nunca en un issue público.
