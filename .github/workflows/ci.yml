@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux · typecheck, unit, E2E
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      # Ubuntu 24.04 restricts unprivileged user namespaces, which the Chromium sandbox needs.
+      # We keep the sandbox ON and relax the host policy instead of passing --no-sandbox.
+      - name: Allow Chromium sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: E2E (Electron under Xvfb)
+        run: xvfb-run -a npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-results-linux
+          path: test-results/
+          retention-days: 7
+
+  windows:
+    name: Windows · unit, E2E, installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: E2E
+        run: npx playwright test
+      - name: Build NSIS installer (unsigned)
+        run: npx electron-builder --win --x64 --publish never
+      - name: SHA-256
+        shell: pwsh
+        run: Get-FileHash release/*.exe -Algorithm SHA256 | Format-List | Out-File release/SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: investor-browser-windows-x64
+          path: |
+            release/*.exe
+            release/SHA256.txt
+          retention-days: 14

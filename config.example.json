@@ -1,0 +1,13 @@
+{
+  "_comment": "Ejemplo SIN secretos. Fase 1 no necesita configuración: todo se ajusta desde la app. Estas variables de entorno son opcionales.",
+  "env": {
+    "IB_USER_DATA": "Carpeta de perfil alternativa (perfil portátil o pruebas). Por defecto: carpeta de datos del sistema.",
+    "IB_DOWNLOADS_DIR": "Carpeta de descargas alternativa. Por defecto: Descargas del usuario.",
+    "IB_DEBUG": "1 para registros de depuración (sin URLs con parámetros ni datos personales)."
+  },
+  "futuro": {
+    "secEdgarUserAgent": "Fase 3 — se pedirá en Ajustes: 'Nombre Apellido correo@ejemplo.com' (requisito de la SEC).",
+    "fredApiKey": "Fase 3 — opcional, la introduce el usuario en Ajustes y se cifra con el almacén seguro del sistema. Nunca en archivos del repositorio.",
+    "aiProvider": "Fase 5 — 'none' por defecto."
+  }
+}
