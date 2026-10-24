@@ -71,52 +71,54 @@ export function QualityView({ company, table }: { company: Company; table: Figur
       {roic.some((r) => r.roic !== null) && (
         <section className="card">
           <h2>ROIC por ejercicio</h2>
-          <table className="fin-table" data-testid="roic-table">
-            <thead>
-              <tr>
-                <th />
-                {roic.map((r) => (
-                  <th key={r.period} className="mono">
-                    {r.period}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <th>ROIC</th>
-                {roic.map((r) => (
-                  <td key={r.period} className="mono" title={r.reason ?? ''}>
-                    {fmtPct(r.roic)}
-                  </td>
-                ))}
-              </tr>
-              <tr>
-                <th>Tipo impositivo efectivo</th>
-                {roic.map((r) => (
-                  <td key={r.period} className="mono">
-                    {fmtPct(r.taxRate)}
-                  </td>
-                ))}
-              </tr>
-              <tr>
-                <th>NOPAT</th>
-                {roic.map((r) => (
-                  <td key={r.period} className="mono">
-                    {r.nopat === null ? '—' : money(r.nopat)}
-                  </td>
-                ))}
-              </tr>
-              <tr>
-                <th>Capital invertido medio</th>
-                {roic.map((r) => (
-                  <td key={r.period} className="mono">
-                    {r.investedCapital === null ? '—' : money(r.investedCapital)}
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
+          <div className="table-wrap">
+            <table className="fin-table" data-testid="roic-table">
+              <thead>
+                <tr>
+                  <th />
+                  {roic.map((r) => (
+                    <th key={r.period} className="mono">
+                      {r.period}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th>ROIC</th>
+                  {roic.map((r) => (
+                    <td key={r.period} className="mono" title={r.reason ?? ''}>
+                      {fmtPct(r.roic)}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <th>Tipo impositivo efectivo</th>
+                  {roic.map((r) => (
+                    <td key={r.period} className="mono">
+                      {fmtPct(r.taxRate)}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <th>NOPAT</th>
+                  {roic.map((r) => (
+                    <td key={r.period} className="mono">
+                      {r.nopat === null ? '—' : money(r.nopat)}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <th>Capital invertido medio</th>
+                  {roic.map((r) => (
+                    <td key={r.period} className="mono">
+                      {r.investedCapital === null ? '—' : money(r.investedCapital)}
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
           <p className="hint">Los ejercicios sin dato indican el motivo al pasar el ratón. No se estiman tipos impositivos ni capital.</p>
         </section>
       )}

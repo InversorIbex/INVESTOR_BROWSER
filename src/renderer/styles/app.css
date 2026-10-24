@@ -3370,3 +3370,13 @@ button {
 .insider-table td:nth-child(3) {
   white-space: nowrap;
 }
+
+/* Wide tables never slide under the side panel: they scroll inside their card. */
+.card:has(> .fin-table),
+.sens {
+  overflow-x: auto;
+}
+.table-wrap > .fin-table th,
+.table-wrap > .fin-table td {
+  white-space: nowrap;
+}

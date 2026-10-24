@@ -27,6 +27,22 @@ test('Fase 4: calidad, forense, insiders (Form 4) y comparación de empresas', a
     await ui.locator('[data-testid="criterion"][data-id="growth"] .crit-toggle').click();
     await expect(ui.locator('[data-testid="criterion"][data-id="growth"] .crit-detail')).toContainText('FY2023 · Ingresos: 900 M');
     await expect(ui.getByTestId('roic-table')).toContainText('31,4 %');
+    // Regression: real companies have 10–15 fiscal years. On a narrow window with the side panel open,
+    // the ROIC table must scroll inside its card instead of pushing the page under the panel.
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(1000, 760));
+    if (!(await ui.getByTestId('right-panel').isVisible())) await ui.evaluate(() => window.ib.invoke('command:run', { id: 'ui.toggleRightPanel' }));
+    await expect(ui.getByTestId('right-panel')).toBeVisible();
+    const overflow = await ui.evaluate(() => {
+      const table = document.querySelector('[data-testid="roic-table"]')!;
+      for (const row of table.querySelectorAll('tr')) for (let i = 0; i < 12; i++) row.appendChild(row.lastElementChild!.cloneNode(true));
+      const card = table.closest('.card')!;
+      const pushed: string[] = [];
+      for (let el = card.parentElement; el && el !== document.body; el = el.parentElement)
+        if (el.scrollWidth > el.clientWidth + 1) pushed.push(el.className || el.tagName);
+      const own = table.parentElement!;
+      return { pushed, scrollsInside: own.scrollWidth > own.clientWidth && getComputedStyle(own).overflowX === 'auto' };
+    });
+    expect(overflow).toEqual({ pushed: [], scrollsInside: true });
 
     // ---- Forensics: explains itself, never accuses
     await ui.locator('[data-testid="dossier-tabs"] [data-view="forensics"]').click();
