@@ -42,17 +42,38 @@ El principio: **el contenido web es hostil**. Ninguna página puede alcanzar Nod
 15. **Form 4 (XML):** lector propio (`src/shared/miniXml.ts`) que ignora DOCTYPE y entidades definidas por el documento (sin XXE ni «billion laughs»), con límites de 5 MB, 64 niveles y 100 000 nodos. Los nombres de archivo se validan y un formulario de otro emisor se rechaza.
 16. **User-Agent:** se elimina el token `Electron/x.y` para que las webs traten la app como Chrome. No afecta a la seguridad.
 
+17. ***Fuses* de Electron** (`package.json` › `build.electronFuses`), aplicados al ejecutable distribuido:
+
+    | Fuse | Valor | Efecto |
+    | --- | --- | --- |
+    | `runAsNode` | off | `ELECTRON_RUN_AS_NODE` no convierte la app en un intérprete de Node |
+    | `enableNodeOptionsEnvironmentVariable` | off | Se ignoran `NODE_OPTIONS` y `NODE_EXTRA_CA_CERTS` |
+    | `enableNodeCliInspectArguments` | off | Se ignoran `--inspect`, `--inspect-brk` y `SIGUSR1` |
+    | `onlyLoadAppFromAsar` | on | Solo se carga el código de `app.asar` |
+    | `enableEmbeddedAsarIntegrityValidation` | on | Integridad de `app.asar` comprobada al cargar (Windows y macOS) |
+    | `enableCookieEncryption` | on | Cookies cifradas en disco con las claves del sistema (transición irreversible: no desactivar) |
+    | `grantFileProtocolExtraPrivileges` | **on** | Ver excepciones: la UI se carga hoy desde `file://` dentro de `app.asar` |
+
+    `scripts/smoke-packaged.mjs` arranca el ejecutable empaquetado con `ELECTRON_RUN_AS_NODE=1` y `NODE_OPTIONS` hostil y comprueba que la UI carga desde `app.asar` y responde por IPC. Se ejecuta en CI en Linux y Windows. Se comprobó que **falla** si se desactivan los *fuses*: la app termina con código 9.
+
+    Las pruebas E2E usan Electron sin empaquetar, porque Playwright necesita `--inspect`.
+
 ## Excepciones documentadas
 
 | Excepción | Justificación |
 | --- | --- |
 | CSP de la UI permite `img-src https:` | Para mostrar favicons de las webs abiertas. Una imagen no puede ejecutar código; el resto de recursos remotos están prohibidos. |
 | CSP de la UI permite `style-src 'unsafe-inline'` | Estilos en línea de React (anchos dinámicos). No hay `script-src` en línea. |
+| Fuse `grantFileProtocolExtraPrivileges` activado | Probado: con el fuse desactivado, la UI empaquetada no carga desde `app.asar` (`ERR_FILE_NOT_FOUND`). Las páginas web no pueden navegar a `file:` (regla 3), así que el privilegio solo afecta a la UI propia. **Mejora prevista:** servir la UI desde un protocolo propio (`app://`) y desactivar el fuse. |
 | `--no-sandbox` | **Nunca en la app.** Chromium no admite su sandbox como `root`; las pruebas deben ejecutarse con un usuario normal. |
 
 ## Pendiente antes de distribución pública
 
-- **Firma de código** (Authenticode en Windows, notarización en macOS).
-- **Actualizaciones automáticas firmadas** (`electron-updater` con verificación de firma y canal HTTPS). Hoy la publicación está desactivada (`--publish never`) y la app no se autoactualiza.
-- **Fuses de Electron** (`runAsNode` off, `enableNodeOptionsEnvironmentVariable` off, `onlyLoadAppFromAsar` on, integridad del asar).
+- **Firma de código.**
+  - Windows: vía Microsoft Store, preparada en [MICROSOFT_STORE.md](MICROSOFT_STORE.md) y pendiente del envío. El `.exe` de GitHub sigue sin firmar.
+  - macOS: notarización.
+- **Actualizaciones.**
+  - En la Store, las gestiona Microsoft.
+  - El `.exe` no se autoactualiza: la publicación está desactivada con `--publish never`.
+- **UI desde un protocolo propio** (`app://`) para poder desactivar `grantFileProtocolExtraPrivileges`.
 - Revisión externa del modelo de amenazas.

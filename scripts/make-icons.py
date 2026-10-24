@@ -23,3 +23,20 @@ icon = img.resize((512, 512), Image.LANCZOS)
 icon.save("build/icon.png")
 icon.save("build/icon.ico", sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
 print("ok")
+
+# Microsoft Store (MSIX/AppX) tile assets → build/appx/ (electron-builder picks them up by name).
+import os
+os.makedirs("build/appx", exist_ok=True)
+def square(n, margin=0.0):
+    canvas = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+    inner = int(n * (1 - 2 * margin))
+    canvas.paste(img.resize((inner, inner), Image.LANCZOS), ((n - inner) // 2, (n - inner) // 2))
+    return canvas
+square(50).save("build/appx/StoreLogo.png")
+square(44).save("build/appx/Square44x44Logo.png")
+square(150, 0.18).save("build/appx/Square150x150Logo.png")
+wide = Image.new("RGBA", (310, 150), (0, 0, 0, 0))
+mark = img.resize((96, 96), Image.LANCZOS)
+wide.paste(mark, ((310 - 96) // 2, (150 - 96) // 2))
+wide.save("build/appx/Wide310x150Logo.png")
+print("appx ok")

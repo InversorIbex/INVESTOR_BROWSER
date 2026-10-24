@@ -1,6 +1,6 @@
 {
   "name": "investor-browser",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Desktop web browser for fundamental stock investors. Real browsing, local research, free official data.",
   "main": "dist/main/index.cjs",
   "scripts": {
@@ -13,7 +13,8 @@
     "test:all": "npm run typecheck && npm test && npm run test:e2e",
     "dist:win": "npm run build && electron-builder --win --x64 --publish never",
     "dist:linux": "npm run build && electron-builder --linux AppImage --publish never",
-    "dist:dir": "npm run build && electron-builder --dir --publish never"
+    "dist:dir": "npm run build && electron-builder --dir --publish never",
+    "dist:store": "npm run build && electron-builder --win appx --x64 --publish never"
   },
   "author": "Investor Browser contributors",
   "license": "Apache-2.0",
@@ -77,6 +78,17 @@
       "deleteAppDataOnUninstall": false,
       "artifactName": "Investor-Browser-Setup-${version}-x64.${ext}"
     },
+    "appx": {
+      "displayName": "Investor Browser",
+      "applicationId": "InvestorBrowser",
+      "backgroundColor": "transparent",
+      "languages": [
+        "es-ES",
+        "en-US"
+      ],
+      "showNameOnTiles": true,
+      "artifactName": "Investor-Browser-${version}-x64-store.${ext}"
+    },
     "linux": {
       "target": [
         "AppImage"
@@ -90,6 +102,16 @@
         "dmg"
       ],
       "category": "public.app-category.finance"
+    },
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true,
+      "loadBrowserProcessSpecificV8Snapshot": false,
+      "grantFileProtocolExtraPrivileges": true
     }
   },
   "repository": {

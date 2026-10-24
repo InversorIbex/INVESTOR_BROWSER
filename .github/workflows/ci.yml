@@ -29,7 +29,11 @@ jobs:
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: E2E (Electron under Xvfb)
         run: xvfb-run -a npx playwright test
-      - uses: actions/upload-artifact@v4
+      - name: Package (unpacked) with Electron fuses
+        run: npx electron-builder --linux --dir --publish never
+      - name: Smoke test of the packaged app (fuses on)
+        run: xvfb-run -a node scripts/smoke-packaged.mjs release/linux-unpacked/investor-browser
+      - uses: actions/upload-artifact@v5
         if: failure()
         with:
           name: e2e-results-linux
@@ -53,10 +57,16 @@ jobs:
         run: npx playwright test
       - name: Build NSIS installer (unsigned)
         run: npx electron-builder --win --x64 --publish never
+      - name: Smoke test of the packaged app (fuses + asar integrity)
+        run: node scripts/smoke-packaged.mjs release/win-unpacked/InvestorBrowser.exe
+      # Builds the Microsoft Store package with a dummy identity, only to catch config errors early.
+      # It is NOT uploaded: the real one uses the Partner Center identity (see docs/MICROSOFT_STORE.md).
+      - name: Microsoft Store package (test identity, not published)
+        run: npx electron-builder --win appx --x64 --publish never -c.appx.identityName=InvestorBrowser.CITest -c.appx.publisher=CN=00000000-0000-0000-0000-000000000000 -c.appx.publisherDisplayName=CI
       - name: SHA-256
         shell: pwsh
         run: Get-FileHash release/*.exe -Algorithm SHA256 | Format-List | Out-File release/SHA256.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: investor-browser-windows-x64
           path: |

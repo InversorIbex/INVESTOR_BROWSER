@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { launch, newProfileDir, state, waitFor } from './helpers';
 import { startMockSec } from './mockSec';
+import pkg from '../../package.json' with { type: 'json' };
 
 test('Fase 3: vincular con la SEC, importar cifras XBRL con procedencia y trabajar sin conexión', async () => {
   const mock = await startMockSec();
@@ -30,7 +31,7 @@ test('Fase 3: vincular con la SEC, importar cifras XBRL con procedencia y trabaj
 
     // Fair access: declared User-Agent on every request, ≤ 10 requests/second.
     expect(mock.hits.length).toBeGreaterThanOrEqual(3);
-    for (const h of mock.hits) expect(h.ua).toBe('InvestorBrowser/0.4.0 Ana Perez ana@example.com');
+    for (const h of mock.hits) expect(h.ua).toBe(`InvestorBrowser/${pkg.version} Ana Perez ana@example.com`);
     const gaps = mock.hits.slice(1).map((h, i) => h.at - mock.hits[i]!.at);
     expect(Math.min(...gaps)).toBeGreaterThanOrEqual(100);
 

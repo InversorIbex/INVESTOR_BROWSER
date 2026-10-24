@@ -215,6 +215,10 @@ flowchart TB
 - Citas y notas se muestran **siempre como texto**. Un test E2E intenta colar `<script>` e `<img onerror>`.
 - **Certificados inválidos bloqueados sin opción de «continuar de todos modos»**, permisos por sitio denegados por defecto, `<webview>` prohibido y descargas que nunca sobrescriben.
 - Los registros no guardan URLs con parámetros, cookies ni formularios.
+- **Electron *fuses*** en el ejecutable distribuido:
+  - se ignoran `ELECTRON_RUN_AS_NODE`, `NODE_OPTIONS` y `--inspect`;
+  - solo se carga código desde `app.asar`, con comprobación de integridad en Windows;
+  - las cookies se guardan cifradas con las claves del sistema.
 
 📖 Detalle completo: [Modelo de seguridad](docs/SECURITY_MODEL.md) · Informar de una vulnerabilidad: [SECURITY.md](SECURITY.md)
 
@@ -224,7 +228,15 @@ flowchart TB
 
 ### ⬇️ Descargar para Windows 10/11 (la forma fácil)
 
-Ve a **[Releases](https://github.com/InversorIbex/INVESTOR_BROWSER/releases/latest)**, descarga `Investor-Browser-Setup-<versión>-x64.exe` en *Assets* y ábrelo. Como aún no está firmado, SmartScreen avisará: **Más información → Ejecutar de todas formas**.
+Ve a **[Releases](https://github.com/InversorIbex/INVESTOR_BROWSER/releases/latest)**, descarga `Investor-Browser-Setup-<versión>-x64.exe` en *Assets* y ábrelo.
+
+Como aún no está firmado, verás dos avisos:
+
+1. Si el navegador marca la descarga como **«Sin confirmar»**, abre las descargas (`Ctrl+J`) y elige **Conservar**.
+2. Al abrir el archivo, SmartScreen mostrará otro aviso: pulsa **Más información → Ejecutar de todas formas**.
+
+> [!NOTE]
+> **Microsoft Store (en preparación).** La versión firmada y sin avisos llegará a través de la Store, donde Microsoft firma el paquete sin coste para el proyecto. El estado y los pasos están en [docs/MICROSOFT_STORE.md](docs/MICROSOFT_STORE.md).
 
 ### Desde el código (Windows, macOS o Linux)
 
@@ -243,10 +255,10 @@ Requisitos: **Node.js ≥ 22.12** y npm 10. No hace falta ninguna clave de API.
 npm run dist:win   # → release/Investor-Browser-Setup-<versión>-x64.exe
 ```
 
-Cada etiqueta de versión (`git tag v0.4.0 && git push origin v0.4.0`) lanza [release.yml](.github/workflows/release.yml), que compila y prueba en Windows y publica el instalador y su SHA-256 en *Releases*. También se puede lanzar a mano desde Actions → «Release (Windows installer)» → *Run workflow*.
+Subir `version` en `package.json` en `main` (o crear una etiqueta `vX.Y.Z`) lanza [release.yml](.github/workflows/release.yml), que compila y prueba en Windows y publica el instalador y su SHA-256 en *Releases*. También se puede lanzar a mano desde Actions → «Release (Windows installer)» → *Run workflow*.
 
 > [!WARNING]
-> El instalador **todavía no está firmado digitalmente**: Windows SmartScreen mostrará un aviso. La firma de código y las actualizaciones automáticas firmadas están previstas antes de la v1.0. Al desinstalar, **tu investigación se conserva** en `%APPDATA%\Investor Browser`.
+> El instalador `.exe` **no está firmado digitalmente**, así que Windows SmartScreen mostrará un aviso. La vía prevista para quitarlo es Microsoft Store: ver [docs/MICROSOFT_STORE.md](docs/MICROSOFT_STORE.md). Al desinstalar el `.exe`, **tu investigación se conserva** en `%APPDATA%\Investor Browser`.
 
 ### Otros comandos
 
@@ -254,6 +266,8 @@ Cada etiqueta de versión (`git tag v0.4.0 && git push origin v0.4.0`) lanza [re
 |---|---|
 | `npm start` | Compila y arranca la versión de producción |
 | `npm run dist:linux` | Genera un AppImage |
+| `npm run dist:store` | Paquete `.appx` para Microsoft Store (solo en Windows; requiere la identidad de Partner Center) |
+| `node scripts/smoke-packaged.mjs <exe>` | Prueba de humo de la app empaquetada con los *fuses* activos |
 | `npm run typecheck` | TypeScript estricto |
 | `npm test` | Pruebas unitarias |
 | `npm run test:e2e` | Pruebas E2E con Electron real |
@@ -318,7 +332,11 @@ src/
   - contenido hostil que debe mostrarse como texto;
   - SEC simulada: consentimiento, User-Agent, ritmo medido en el servidor, cifras con procedencia y modo sin conexión;
   - calidad, forense, insiders desde el archivo EDGAR simulado y comparación de empresas.
-- **CI en Linux y Windows**: typecheck, pruebas, E2E y generación del instalador.
+- **CI en Linux y Windows**:
+  - typecheck, pruebas y E2E;
+  - generación del instalador;
+  - **prueba de humo de la app empaquetada** con los *fuses* activos;
+  - compilación de prueba del paquete de Microsoft Store.
 
 ---
 
@@ -331,7 +349,7 @@ src/
 - [x] **Fase 4** · Quality Compounder · Financial Forensics · Insider Tracker (Form 4) · Comparar empresas
 - [ ] **Crash Replay** · pendiente de una fuente de cotizaciones históricas con licencia gratuita
 - [ ] **Fase 5** · Investment Copilot **opcional**: sin IA por defecto, con consentimiento antes de enviar nada
-- [ ] **Fase 6** · Firma de código, actualizaciones firmadas, pruebas en Windows 10 y 11 reales
+- [ ] **Fase 6** · ✅ *fuses* de Electron y prueba de la app empaquetada · ✅ paquete para Microsoft Store (firma gratuita de Microsoft) · ⏳ envío y certificación en la Store · ⏳ pruebas en Windows 10 y 11 reales
 
 Criterios de aceptación y riesgos: [docs/ROADMAP.md](docs/ROADMAP.md) · Cambios: [CHANGELOG.md](CHANGELOG.md)
 

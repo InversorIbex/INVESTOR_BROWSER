@@ -64,13 +64,26 @@ jobs:
         run: npx playwright test
       - name: Build NSIS installer (unsigned)
         run: npx electron-builder --win --x64 --publish never
+      - name: Smoke test of the packaged app (fuses + asar integrity)
+        run: node scripts/smoke-packaged.mjs release/win-unpacked/InvestorBrowser.exe
+
+      # Microsoft Store package. Only built when the Partner Center identity is configured as
+      # repository VARIABLES (not secrets: these values are public in the Store listing anyway).
+      # Unsigned on purpose: Microsoft signs it when the submission is certified.
+      - name: Microsoft Store package (.appx, for Partner Center)
+        if: vars.MSSTORE_IDENTITY_NAME != '' && vars.MSSTORE_PUBLISHER != '' && vars.MSSTORE_PUBLISHER_DISPLAY_NAME != ''
+        env:
+          ID: ${{ vars.MSSTORE_IDENTITY_NAME }}
+          PUB: ${{ vars.MSSTORE_PUBLISHER }}
+          PUBNAME: ${{ vars.MSSTORE_PUBLISHER_DISPLAY_NAME }}
+        shell: pwsh
+        run: npx electron-builder --win appx --x64 --publish never "-c.appx.identityName=$env:ID" "-c.appx.publisher=$env:PUB" "-c.appx.publisherDisplayName=$env:PUBNAME"
 
       - name: Checksum
         shell: pwsh
         run: |
-          $exe = Get-ChildItem release/*.exe | Select-Object -First 1
-          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
-          "$hash  $($exe.Name)" | Out-File -Encoding ascii release/SHA256SUMS.txt
+          $files = Get-ChildItem release/*.exe, release/*.appx -ErrorAction SilentlyContinue
+          $files | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" } | Out-File -Encoding ascii release/SHA256SUMS.txt
           Get-Content release/SHA256SUMS.txt
 
       - name: Publish GitHub Release
@@ -80,6 +93,7 @@ jobs:
         run: |
           $tag = "${{ needs.check.outputs.tag }}"
           $exe = (Get-ChildItem release/*.exe | Select-Object -First 1).FullName
+          $assets = @($exe, "release/SHA256SUMS.txt") + @(Get-ChildItem release/*.appx -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
           $notes = @"
           Instalador para **Windows 10/11 (64 bits)**.
 
@@ -87,13 +101,15 @@ jobs:
           2. Ábrelo. Como el instalador **todavía no está firmado digitalmente**, Windows SmartScreen mostrará un aviso: pulsa **Más información → Ejecutar de todas formas**.
           3. Opcional: comprueba la huella con ``Get-FileHash <archivo> -Algorithm SHA256`` y compárala con ``SHA256SUMS.txt``.
 
+          El archivo ``.appx`` (si aparece) es **solo para subirlo a Microsoft Store**; no se instala con doble clic. Cuando la app esté publicada en la Store, instálala desde allí: Microsoft la firma y no aparece ningún aviso.
+
           Tus datos se guardan en ``%APPDATA%\Investor Browser`` y se conservan al desinstalar.
 
           Cambios: ver [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md).
           "@
           gh release view $tag --repo "${{ github.repository }}" *> $null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag $exe release/SHA256SUMS.txt --clobber --repo "${{ github.repository }}"
+            gh release upload $tag $assets --clobber --repo "${{ github.repository }}"
           } else {
-            gh release create $tag $exe release/SHA256SUMS.txt --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "Investor Browser $tag" --notes $notes --prerelease
+            gh release create $tag $assets --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "Investor Browser $tag" --notes $notes --prerelease
           }

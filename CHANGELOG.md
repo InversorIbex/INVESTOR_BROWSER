@@ -2,6 +2,23 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [0.5.0] — 2026-10-24
+
+### Añadido — Fase 6 (primera parte): endurecimiento y distribución
+- **Electron *fuses*** en el ejecutable distribuido:
+  - `ELECTRON_RUN_AS_NODE`, `NODE_OPTIONS`, `NODE_EXTRA_CA_CERTS` y `--inspect` se ignoran;
+  - solo se carga código desde `app.asar`, con validación de integridad en Windows;
+  - cookies cifradas en disco.
+- **Prueba de humo de la app empaquetada** (`scripts/smoke-packaged.mjs`), en CI de Linux y Windows y antes de cada release. Arranca el ejecutable real con variables hostiles y comprueba que la UI carga desde `app.asar` y que el IPC responde.
+- **Paquete para Microsoft Store** (`npm run dist:store`, destino `appx`) con logotipos propios. La CI lo compila con una identidad de prueba en cada cambio. La release lo genera con la identidad real cuando se configuran las variables `MSSTORE_*`. Guía paso a paso en [docs/MICROSOFT_STORE.md](docs/MICROSOFT_STORE.md).
+
+### Cambiado
+- Las notas de la release y el README explican el aviso «Sin confirmar» del navegador y el de SmartScreen.
+- `actions/upload-artifact` v5.
+
+### Sin cambios
+- **Nada está firmado todavía.** El `.exe` de GitHub sigue sin firma. La firma llegará cuando Microsoft certifique el envío a la Store.
+
 ## [0.4.0] — 2026-10-24
 
 ### Añadido — Fase 4: herramientas de análisis

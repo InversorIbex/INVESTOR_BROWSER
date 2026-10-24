@@ -70,15 +70,25 @@ Pendiente de verificar en un equipo con acceso a sec.gov: lectura de Form 4 real
 
 Sin IA por defecto. Proveedor externo o local configurado por el usuario; claves en `safeStorage`; vista previa y consentimiento antes de enviar contenido; respuestas separadas en hechos verificados / cálculos / interpretación / lo que falta.
 
-## Fase 6 — Calidad y distribución
+## Fase 6 — Calidad y distribución (en curso, v0.5.0)
 
-Firma de código, actualizaciones firmadas, fuses de Electron, pruebas en Windows 10 y 11 reales.
+| Criterio | Estado | Verificación |
+| --- | --- | --- |
+| *Fuses* de Electron (runAsNode, NODE_OPTIONS, inspect, solo asar, integridad del asar, cookies cifradas) | ✅ | `@electron/fuses read` sobre el ejecutable. Prueba de humo `scripts/smoke-packaged.mjs` en CI (Linux y Windows), que se comprobó que falla si se quitan los *fuses* |
+| Firma en Windows sin coste | 🟡 Preparado | Vía Microsoft Store: paquete `.appx` compilado en CI con identidad de prueba. Falta que el titular cree la cuenta, reserve el nombre y haga el envío ([MICROSOFT_STORE.md](MICROSOFT_STORE.md)). **Hasta la certificación, nada está firmado** |
+| Actualizaciones | 🟡 | Las gestiona la Store. El `.exe` de GitHub no se autoactualiza: no hay canal de actualización sin firmar |
+| UI desde protocolo propio (`app://`) para desactivar `grantFileProtocolExtraPrivileges` | ⏳ | — |
+| Pruebas en Windows 10 y 11 reales | ⏳ | La CI usa Windows Server (`windows-latest`). No se ha probado en equipos Windows 10/11 de escritorio |
+
+Decisión: firmar vía Microsoft Store en lugar de comprar un certificado. Los certificados OV cuestan 150–300 $/año y requieren HSM; los EV ya no quitan SmartScreen al instante; Azure Artifact Signing solo admite particulares de EE. UU./Canadá. El encargo prohíbe costes sin aprobación.
 
 ## Riesgos
 
 | Riesgo | Impacto | Mitigación |
 | --- | --- | --- |
-| Instalador sin firma → aviso de SmartScreen | Alto para adopción | Documentado; firma antes de v1.0 |
+| Instalador sin firma → aviso de SmartScreen | Alto para adopción | Distribución firmada vía Microsoft Store ([MICROSOFT_STORE.md](MICROSOFT_STORE.md)); el `.exe` de GitHub sigue documentado como sin firmar |
+| Política 10.2.1 de la Store: Chromium ≤ 2 versiones mayores por detrás | Alto (retirada de la Store) | Actualizar Electron en cada versión mayor (≈ 8 semanas) |
+| Fuse de integridad del asar mal aplicado → la app no arranca | Alto | Prueba de humo del ejecutable empaquetado en CI de Windows antes de publicar |
 | `node:sqlite` aún marcado como en evolución por Node | Medio | Encapsulado en `db.ts`; tests de persistencia; driver sustituible |
 | Webs que detectan navegadores «no Chrome» | Bajo | UA sin token Electron |
 | Variación de etiquetas XBRL | Alto | Mapa de conceptos por prioridad (`src/shared/xbrl.ts`), conceptos usados visibles en cada cifra, campos vacíos en vez de ceros |
