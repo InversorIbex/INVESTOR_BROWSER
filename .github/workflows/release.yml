@@ -1,0 +1,79 @@
+name: Release (Windows installer)
+
+# Publishes the Windows installer as a GitHub Release asset, downloadable
+# without logging in and without expiry (unlike workflow artifacts).
+#  - Push a tag like v0.4.0  →  builds and publishes that version.
+#  - Or run it by hand from the Actions tab ("Run workflow").
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write # needed to create the release and upload the installer
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    name: Build and publish Windows installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: E2E
+        run: npx playwright test
+      - name: Build NSIS installer (unsigned)
+        run: npx electron-builder --win --x64 --publish never
+
+      - name: Resolve version and tag
+        id: v
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ("${{ github.ref_type }}" -eq "tag") { $tag = "${{ github.ref_name }}" } else { $tag = "v$version" }
+          if ($tag -ne "v$version") { throw "La etiqueta $tag no coincide con la versión de package.json ($version)" }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Checksum
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem release/*.exe | Select-Object -First 1
+          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $($exe.Name)" | Out-File -Encoding ascii release/SHA256SUMS.txt
+          Get-Content release/SHA256SUMS.txt
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.v.outputs.tag }}"
+          $exe = (Get-ChildItem release/*.exe | Select-Object -First 1).FullName
+          $notes = @"
+          Instalador para **Windows 10/11 (64 bits)**.
+
+          1. Descarga ``$(Split-Path $exe -Leaf)`` (más abajo, en *Assets*).
+          2. Ábrelo. Como el instalador **todavía no está firmado digitalmente**, Windows SmartScreen mostrará un aviso: pulsa **Más información → Ejecutar de todas formas**.
+          3. Opcional: comprueba la huella con ``Get-FileHash <archivo> -Algorithm SHA256`` y compárala con ``SHA256SUMS.txt``.
+
+          Tus datos se guardan en ``%APPDATA%\Investor Browser`` y se conservan al desinstalar.
+
+          Cambios: ver [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md).
+          "@
+          gh release view $tag --repo "${{ github.repository }}" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $exe release/SHA256SUMS.txt --clobber --repo "${{ github.repository }}"
+          } else {
+            gh release create $tag $exe release/SHA256SUMS.txt --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "Investor Browser $tag" --notes $notes --prerelease
+          }

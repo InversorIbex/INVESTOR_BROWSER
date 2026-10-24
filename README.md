@@ -222,6 +222,10 @@ flowchart TB
 
 ## 🚀 Instalación
 
+### ⬇️ Descargar para Windows 10/11 (la forma fácil)
+
+Ve a **[Releases](https://github.com/InversorIbex/INVESTOR_BROWSER/releases/latest)**, descarga `Investor-Browser-Setup-<versión>-x64.exe` en *Assets* y ábrelo. Como aún no está firmado, SmartScreen avisará: **Más información → Ejecutar de todas formas**.
+
 ### Desde el código (Windows, macOS o Linux)
 
 ```bash
@@ -239,7 +243,7 @@ Requisitos: **Node.js ≥ 22.12** y npm 10. No hace falta ninguna clave de API.
 npm run dist:win   # → release/Investor-Browser-Setup-<versión>-x64.exe
 ```
 
-También lo genera automáticamente [GitHub Actions](.github/workflows/ci.yml) en `windows-latest` como artefacto descargable, con su SHA-256.
+Cada etiqueta de versión (`git tag v0.4.0 && git push origin v0.4.0`) lanza [release.yml](.github/workflows/release.yml), que compila y prueba en Windows y publica el instalador y su SHA-256 en *Releases*. También se puede lanzar a mano desde Actions → «Release (Windows installer)» → *Run workflow*.
 
 > [!WARNING]
 > El instalador **todavía no está firmado digitalmente**: Windows SmartScreen mostrará un aviso. La firma de código y las actualizaciones automáticas firmadas están previstas antes de la v1.0. Al desinstalar, **tu investigación se conserva** en `%APPDATA%\Investor Browser`.
