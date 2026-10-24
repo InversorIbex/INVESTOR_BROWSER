@@ -100,6 +100,7 @@ export const CONCEPT_MAP: Partial<Record<MetricId, ConceptRule[]>> = {
   gross_debt: [
     // Total debt only when the filer tags it directly. Component sums are derived below.
     { taxonomy: 'us-gaap', kind: 'instant', unit: 'currency', concepts: ['LongTermDebt', 'DebtLongtermAndShorttermCombinedAmount'] },
+    { taxonomy: 'ifrs-full', kind: 'instant', unit: 'currency', concepts: ['Borrowings'] },
   ],
   diluted_shares: [
     { taxonomy: 'us-gaap', kind: 'duration', unit: 'shares', concepts: ['WeightedAverageNumberOfDilutedSharesOutstanding'] },
@@ -145,6 +146,15 @@ export const CONCEPT_MAP: Partial<Record<MetricId, ConceptRule[]>> = {
     },
     { taxonomy: 'ifrs-full', kind: 'duration', unit: 'currency', concepts: ['ProfitLossBeforeTax'] },
   ],
+  dna: [
+    { taxonomy: 'us-gaap', kind: 'duration', unit: 'currency', concepts: ['DepreciationDepletionAndAmortization', 'DepreciationAndAmortization', 'DepreciationAmortizationAndAccretionNet'] },
+    {
+      taxonomy: 'ifrs-full',
+      kind: 'duration',
+      unit: 'currency',
+      concepts: ['DepreciationAndAmortisationExpense', 'AdjustmentsForDepreciationAndAmortisationExpense', 'DepreciationAmortisationAndImpairmentLossReversalOfImpairmentLossRecognisedInProfitOrLoss'],
+    },
+  ],
   dividend_per_share: [
     { taxonomy: 'us-gaap', kind: 'duration', unit: 'perShare', concepts: ['CommonStockDividendsPerShareDeclared', 'CommonStockDividendsPerShareCashPaid'] },
     { taxonomy: 'ifrs-full', kind: 'duration', unit: 'perShare', concepts: ['DividendsRecognisedAsDistributionsToOwnersPerShare'] },
@@ -152,9 +162,18 @@ export const CONCEPT_MAP: Partial<Record<MetricId, ConceptRule[]>> = {
 };
 
 /** Debt components summed when no total is tagged (leases and commercial paper excluded on purpose). */
-const DEBT_COMPONENTS = ['LongTermDebtNoncurrent', 'LongTermDebtCurrent'];
+const DEBT_COMPONENTS: Record<Taxonomy, string[][]> = {
+  'us-gaap': [['LongTermDebtNoncurrent', 'LongTermDebtCurrent']],
+  'ifrs-full': [
+    ['NoncurrentPortionOfNoncurrentBorrowings', 'CurrentBorrowingsAndCurrentPortionOfNoncurrentBorrowings'],
+    ['LongtermBorrowings', 'ShorttermBorrowings'],
+  ],
+};
+/** IFRS concepts read from ESEF reports besides those in CONCEPT_MAP. */
+export const EXTRA_IFRS_CONCEPTS = DEBT_COMPONENTS['ifrs-full'].flat();
 
-export const ANNUAL_FORMS = new Set(['10-K', '10-K/A', '10-KT', '10-KT/A', '20-F', '20-F/A', '40-F', '40-F/A']);
+/** Annual report forms: SEC (10-K, 20-F, 40-F) and European ESEF annual financial reports. */
+export const ANNUAL_FORMS = new Set(['10-K', '10-K/A', '10-KT', '10-KT/A', '20-F', '20-F/A', '40-F', '40-F/A', 'ESEF']);
 
 export interface NormalizedFact {
   metric: MetricId;
@@ -301,37 +320,37 @@ export function normalizeCompanyFacts(data: CompanyFacts, maxYears = 10): Normal
   }
 
   // Gross debt from components when the total is not tagged.
-  if (primary === 'us-gaap') {
+  for (const pair of DEBT_COMPONENTS[primary]) {
     const have = new Set(result.facts.filter((f) => f.metric === 'gross_debt').map((f) => f.periodEnd));
-    const parts = DEBT_COMPONENTS.map((c) => {
+    const parts = pair.map((c) => {
       const entry = tax[c];
       const unit = entry ? pickUnit(entry.units, 'currency') : null;
       return entry && unit ? { unit, series: annualSeries(entry.units[unit]!, 'instant', annualEnds) } : null;
     });
-    if (parts.every((p) => p) && parts[0]!.unit === parts[1]!.unit) {
-      for (const end of keepEnds) {
-        if (have.has(end)) continue;
-        const a = parts[0]!.series.get(end);
-        const b = parts[1]!.series.get(end);
-        if (!a || !b) continue;
-        result.facts.push({
-          metric: 'gross_debt',
-          period: fiscalYearLabel(end),
-          periodStart: null,
-          periodEnd: end,
-          value: a.latest.val + b.latest.val,
-          unit: parts[0]!.unit,
-          currency: parts[0]!.unit,
-          taxonomy: 'us-gaap',
-          concept: 'us-gaap:LongTermDebtNoncurrent + us-gaap:LongTermDebtCurrent',
-          accn: a.latest.accn,
-          form: a.latest.form,
-          filed: a.latest.filed,
-          derived: true,
-          restatedFrom: null,
-        });
-        result.conceptsUsed.gross_debt = [...new Set([...(result.conceptsUsed.gross_debt ?? []), 'us-gaap:LongTermDebtNoncurrent + us-gaap:LongTermDebtCurrent'])];
-      }
+    if (!parts.every((p) => p) || parts[0]!.unit !== parts[1]!.unit) continue;
+    const formula = pair.map((c) => `${primary}:${c}`).join(' + ');
+    for (const end of keepEnds) {
+      if (have.has(end)) continue;
+      const a = parts[0]!.series.get(end);
+      const b = parts[1]!.series.get(end);
+      if (!a || !b) continue;
+      result.facts.push({
+        metric: 'gross_debt',
+        period: fiscalYearLabel(end),
+        periodStart: null,
+        periodEnd: end,
+        value: a.latest.val + b.latest.val,
+        unit: parts[0]!.unit,
+        currency: parts[0]!.unit,
+        taxonomy: primary,
+        concept: formula,
+        accn: a.latest.accn,
+        form: a.latest.form,
+        filed: a.latest.filed,
+        derived: true,
+        restatedFrom: null,
+      });
+      result.conceptsUsed.gross_debt = [...new Set([...(result.conceptsUsed.gross_debt ?? []), formula])];
     }
   }
 

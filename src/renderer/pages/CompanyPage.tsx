@@ -17,6 +17,8 @@ import {
 import { errorMessage, ib, openSaveDialog, showToast, useBrowser, useCompany, useNotesRevision, useSettings } from '../lib/ib';
 import { useCompanyFigures } from '../lib/figures';
 import { FilingsCard, SecCard } from '../components/SecPanel';
+import { EsefCard } from '../components/EsefPanel';
+import { countryOf } from '../../shared/esef';
 import { ForensicsView, InsidersView, QualityView } from '../components/Analysis';
 import { CompanyForm, KIND_ICON, TickerChip, relativeDate } from '../components/research';
 import { EmptyState } from '../components/ui';
@@ -202,7 +204,22 @@ export function CompanyPage({ id }: { id: number }) {
         </div>
 
         <aside className="dossier-side">
-          <SecCard company={company} />
+          {(() => {
+            // European issuers: ESEF first (SEC only matters if they file a 20-F); US issuers: SEC only.
+            const cc = countryOf(company);
+            const european = !company.cik && (!!company.lei || (cc !== null && cc !== 'US'));
+            return european ? (
+              <>
+                <EsefCard company={company} />
+                <SecCard company={company} />
+              </>
+            ) : (
+              <>
+                <SecCard company={company} />
+                {company.lei && <EsefCard company={company} />}
+              </>
+            );
+          })()}
           <FilingsCard company={company} />
           <section className="card">
             <h2>

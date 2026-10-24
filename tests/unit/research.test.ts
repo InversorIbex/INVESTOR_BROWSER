@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { Store } from '../../src/main/db';
+import { Store, SCHEMA_VERSION_COUNT } from '../../src/main/db';
 import { ResearchRepo, ValidationError } from '../../src/main/research';
 
 let dir: string;
@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 describe('companies', () => {
-  it('migrates to the latest version', () => expect(store.schemaVersion).toBe(4));
+  it('migrates to the latest version', () => expect(store.schemaVersion).toBe(SCHEMA_VERSION_COUNT()));
 
   it('creates, normalises and distinguishes homonyms by exchange', () => {
     const a = repo.saveCompany({ name: 'Novo Nordisk', ticker: 'nvo', exchange: 'nyse' });
@@ -159,7 +159,7 @@ describe('official SEC data', () => {
     expect(repo.listNotes(c.id)).toHaveLength(1);
   });
 
-  it('migrates to v4', () => expect(store.schemaVersion).toBe(4));
+  it('migrates to the latest schema', () => expect(store.schemaVersion).toBe(SCHEMA_VERSION_COUNT()));
 });
 
 describe('insider transactions', () => {

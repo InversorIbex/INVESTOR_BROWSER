@@ -39,6 +39,14 @@ El principio: **el contenido web es hostil**. Ninguna página puede alcanzar Nod
     - Redirecciones aceptadas únicamente dentro de `sec.gov`. Tamaño máximo 80 MB, tiempo máximo 30 s, JSON validado y analizado de forma defensiva.
     - Las URLs de documentos se construyen con CIK y número de registro validados; nombres de archivo con `/` o `..` se descartan.
     - `IB_SEC_BASE_URL` (solo pruebas) se ignora salvo que sea `http://127.0.0.1:<puerto>`.
+14b. **Cuentas europeas (ESEF):** mismas reglas que la SEC.
+    - Sesión de red propia (`esef-data`) sin cookies; solo se aceptan respuestas de `filings.xbrl.org`.
+    - Sin contacto declarado no hay peticiones.
+    - Máximo 2 peticiones por segundo y 80 MB por informe.
+    - Las URLs de informes y visores se aceptan solo si son rutas del propio servicio.
+    - El filtro de búsqueda se construye con un nombre saneado o un LEI validado.
+    - El xBRL-JSON se analiza como datos: solo hechos numéricos `ifrs-full` sin dimensiones.
+    - `IB_ESEF_BASE_URL` (solo pruebas) se ignora salvo que sea `http://127.0.0.1:<puerto>`.
 15. **Form 4 (XML):** lector propio (`src/shared/miniXml.ts`) que ignora DOCTYPE y entidades definidas por el documento (sin XXE ni «billion laughs»), con límites de 5 MB, 64 niveles y 100 000 nodos. Los nombres de archivo se validan y un formulario de otro emisor se rechaza.
 16. **User-Agent:** se elimina el token `Electron/x.y` para que las webs traten la app como Chrome. No afecta a la seguridad.
 

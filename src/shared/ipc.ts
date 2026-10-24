@@ -27,6 +27,8 @@ import type {
   Settings,
   SitePermission,
   Suggestion,
+  EsefFilingRow,
+  EsefSyncResult,
 } from './types';
 
 const Id = z.string().min(1).max(64);
@@ -152,6 +154,11 @@ export const RequestSchemas = {
   'sec:clearCache': z.undefined(),
   'sec:insidersSync': z.object({ companyId: PosInt, limit: z.number().int().min(1).max(100).optional() }).strict(),
   'sec:insiders': z.object({ companyId: PosInt }).strict(),
+  'esef:search': z.object({ query: z.string().trim().min(2).max(80) }).strict(),
+  'esef:link': z.object({ companyId: PosInt, lei: z.string().regex(/^[A-Z0-9]{18}[0-9]{2}$/), name: z.string().max(200).optional() }).strict(),
+  'esef:unlink': z.object({ companyId: PosInt }).strict(),
+  'esef:sync': z.object({ companyId: PosInt, force: z.boolean().optional() }).strict(),
+  'esef:filings': z.object({ companyId: PosInt }).strict(),
 } as const;
 
 export type RequestChannel = keyof typeof RequestSchemas;
@@ -215,6 +222,11 @@ export interface ResponseMap {
   'sec:clearCache': void;
   'sec:insidersSync': InsiderSyncResult;
   'sec:insiders': InsiderRow[];
+  'esef:search': { lei: string; name: string }[];
+  'esef:link': Company;
+  'esef:unlink': void;
+  'esef:sync': EsefSyncResult;
+  'esef:filings': EsefFilingRow[];
 }
 
 export interface EventMap {

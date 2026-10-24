@@ -5,10 +5,11 @@ import type { Figure, MetricId, Scale } from '../../shared/finance';
 
 const fmtRaw = (v: number) => v.toLocaleString('es-ES', { maximumFractionDigits: 2 });
 
-/** Official SEC figures as dossier figures, with full provenance in `detail`. */
+/** Official figures (SEC or European ESEF) as dossier figures, with full provenance in `detail`. */
 export function secFactToFigure(f: FinancialFact): Figure {
-  const restatedTxt =
-    f.restatedValue !== null ? `\n⚠ Re-expresado: en el ${f.form.startsWith('20') ? '20-F' : '10-K'} presentado el ${f.restatedFiled} era ${fmtRaw(f.restatedValue)} ${f.unit}.` : '';
+  const esef = f.provider === 'esef';
+  const doc = esef ? 'informe anual ESEF' : f.form.startsWith('20') ? '20-F' : '10-K';
+  const restatedTxt = f.restatedValue !== null ? `\n⚠ Re-expresado: en el ${doc} publicado el ${f.restatedFiled} era ${fmtRaw(f.restatedValue)} ${f.unit}.` : '';
   return {
     metric: f.metric as MetricId,
     period: f.period,
@@ -17,10 +18,10 @@ export function secFactToFigure(f: FinancialFact): Figure {
     currency: f.currency,
     origin: 'published',
     sourceUrl: f.sourceUrl,
-    sourceTitle: `SEC EDGAR · ${f.form} presentado ${f.filed}`,
-    detail: `${f.derived ? 'Suma de componentes: ' : 'Concepto XBRL: '}${f.concept}\nPeriodo: ${f.periodStart ? f.periodStart + ' → ' : 'saldo a '}${f.periodEnd}\nRegistro ${f.accn}${restatedTxt}`,
+    sourceTitle: esef ? `Informe anual oficial (ESEF) · publicado ${f.filed} · vía filings.xbrl.org` : `SEC EDGAR · ${f.form} presentado ${f.filed}`,
+    detail: `${f.derived ? 'Suma de componentes: ' : 'Concepto XBRL: '}${f.concept}\nPeriodo: ${f.periodStart ? f.periodStart + ' → ' : 'saldo a '}${f.periodEnd}\n${esef ? 'Informe' : 'Registro'} ${f.accn}${restatedTxt}`,
     restated: f.restatedValue !== null,
-    provider: 'sec',
+    provider: f.provider,
   };
 }
 

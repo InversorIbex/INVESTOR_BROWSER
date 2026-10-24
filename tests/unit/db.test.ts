@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { Store } from '../../src/main/db';
+import { Store, SCHEMA_VERSION_COUNT } from '../../src/main/db';
 import { DEFAULT_SETTINGS } from '../../src/shared/types';
 import { uniquePath, sanitizeFilename } from '../../src/main/downloads';
 
@@ -25,7 +25,7 @@ afterEach(() => {
 
 describe('Store', () => {
   it('migrates to the latest schema version', () => {
-    expect(store.schemaVersion).toBe(4);
+    expect(store.schemaVersion).toBe(SCHEMA_VERSION_COUNT());
   });
 
   it('returns defaults and persists settings across reopen', () => {

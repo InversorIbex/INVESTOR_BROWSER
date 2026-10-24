@@ -71,7 +71,7 @@ export function ValuationPage({ companyId }: { companyId: number | null }) {
       nextRaw[f.key] = String(f.unit === 'millions' ? +(v.value / 1e6).toFixed(4) : v.value);
       nextProv[f.key] = {
         kind: v.origin,
-        label: `${latestFy} · ${v.provider === 'sec' ? 'SEC' : { published: 'publicado', calculated: 'cálculo', user: 'tuyo', estimate: 'estimación' }[v.origin]}`,
+        label: `${latestFy} · ${v.provider === 'sec' ? 'SEC' : v.provider === 'esef' ? 'ESEF' : { published: 'publicado', calculated: 'cálculo', user: 'tuyo', estimate: 'estimación' }[v.origin]}`,
         title: v.origin === 'calculated' ? v.formula : (v.sources[0]?.url ?? undefined),
       };
       if (v.currency) setCurrency(v.currency);

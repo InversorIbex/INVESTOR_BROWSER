@@ -87,6 +87,7 @@ export const companyFacts = {
       InventoryNet: { label: 'Inventory, Net', units: { USD: [inst('2023-06-30', 50 * M, K23), inst('2024-06-30', 56 * M, K24), inst('2025-06-30', 64 * M, K25)] } },
       Assets: { label: 'Assets', units: { USD: [inst('2023-06-30', 1500 * M, K23), inst('2024-06-30', 1650 * M, K24), inst('2025-06-30', 1800 * M, K25)] } },
       StockholdersEquity: { label: "Stockholders' Equity", units: { USD: [inst('2023-06-30', 900 * M, K23), inst('2024-06-30', 950 * M, K24), inst('2025-06-30', 1000 * M, K25)] } },
+      DepreciationDepletionAndAmortization: { label: 'Depreciation, Depletion and Amortization', units: { USD: [dur(FY23, 60 * M, K23), dur(FY24, 66 * M, K24), dur(FY25, 70 * M, K25)] } },
       ShareBasedCompensation: { label: 'Share-based Payment Arrangement, Noncash Expense', units: { USD: [dur(FY23, 30 * M, K23), dur(FY24, 40 * M, K24), dur(FY25, 55 * M, K25)] } },
       IncomeTaxExpenseBenefit: { label: 'Income Tax Expense (Benefit)', units: { USD: [dur(FY23, 45 * M, K23), dur(FY24, 52 * M, K24), dur(FY25, 66 * M, K25)] } },
       IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest: {

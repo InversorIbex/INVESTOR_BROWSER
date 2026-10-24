@@ -9,7 +9,10 @@ import { TabManager, internalTitle, WEB_PARTITION } from './tabs';
 import { configureWebSession, confirmExternal, installGlobalGuards, isTrustedUiUrl } from './security';
 import { DownloadManager } from './downloads';
 import { ResearchRepo, ValidationError } from './research';
-import { isValidContact, SecClient, SecError } from './sec';
+import { isValidContact, SecClient, SecError, type HttpFetch } from './sec';
+import { EsefClient } from './esef';
+import { ProviderError } from './http';
+import { countryOf, pickAnnualFilings, toCompanyFacts } from '../shared/esef';
 import { normalizeCompanyFacts, parseSubmissions, parseTickerFile, searchTickers, type CompanyFacts } from '../shared/xbrl';
 import { parseForm4, rawForm4File } from '../shared/form4';
 import { logError } from './log';
@@ -46,6 +49,7 @@ let settings: Settings;
 let popups: PopupNotice[] = [];
 let research: ResearchRepo;
 let sec: SecClient;
+let esef: EsefClient;
 let companiesCache: Company[] = [];
 let stateQueued = false;
 let saveTimer: NodeJS.Timeout | null = null;
@@ -71,6 +75,7 @@ async function bootstrap(): Promise<void> {
 
   const webSession = configureWebSession({ store, win: () => win });
   sec = createSecClient();
+  esef = createEsefClient();
   downloads = new DownloadManager(store, {
     win: () => win,
     askLocation: () => settings.askDownloadLocation,
@@ -715,6 +720,7 @@ function registerIpc(): void {
   }));
   registerResearchIpc();
   registerSecIpc();
+  registerEsefIpc();
   handle('data:clear', async (a: { what: 'cache' | 'siteData' }) => {
     const ses = session.fromPartition(WEB_PARTITION);
     if (a.what === 'cache') {
@@ -921,6 +927,99 @@ async function backupData(): Promise<void> {
     logError('backup', err);
     send('toast', { message: 'No se pudo crear la copia de seguridad.', kind: 'error' });
   }
+}
+
+// ---------------------------------------------------------------- data sessions
+
+/**
+ * fetch() through a dedicated, cookie-less session that only accepts responses
+ * from the given hosts (redirects elsewhere are rejected). Data traffic never
+ * mixes with browsing and never carries the user's cookies.
+ */
+function dataFetch(partition: string, hostOk: (host: string) => boolean): HttpFetch {
+  const ses = session.fromPartition(partition);
+  ses.setPermissionRequestHandler((_wc, _p, cb) => cb(false));
+  return async (url, init) => {
+    const res = await ses.fetch(url, { headers: init.headers, signal: init.signal, credentials: 'omit' });
+    const finalHost = new URL(res.url || url).hostname;
+    if (!(hostOk(finalHost) || finalHost === '127.0.0.1')) throw new Error('Redirección a un dominio no permitido');
+    return { status: res.status, headers: res.headers, text: () => res.text() };
+  };
+}
+
+function providerGuard<T>(what: string, fn: () => Promise<T>): Promise<T> {
+  return fn().catch((err: unknown) => {
+    if (err instanceof ProviderError || err instanceof ValidationError || err instanceof SecError) throw new Error(err.message);
+    logError(what, err);
+    throw new Error(`No se pudieron procesar los datos de ${what}.`);
+  });
+}
+
+// ---------------------------------------------------------------- ESEF (Europe)
+
+function createEsefClient(): EsefClient {
+  return new EsefClient({
+    fetch: dataFetch('esef-data', (h) => h === 'filings.xbrl.org'),
+    cache: { get: (k) => store.cacheGet('esef', k), set: (k, b, t) => store.cacheSet('esef', k, b, t) },
+    contact: () => settings.secContact,
+    appVersion: app.getVersion(),
+    baseOverride: process.env.IB_ESEF_BASE_URL ?? null,
+  });
+}
+
+function registerEsefIpc(): void {
+  handle('esef:search', (a: { query: string }) => providerGuard('filings.xbrl.org', () => esef.search(a.query)));
+  handle('esef:link', (a: { companyId: number; lei: string; name?: string }) =>
+    providerGuard('filings.xbrl.org', async () => {
+      const c = research.linkEsef(a.companyId, a.lei, a.name ?? null, null);
+      refreshCompanies();
+      return c;
+    }),
+  );
+  handle('esef:unlink', (a: { companyId: number }) => {
+    research.unlinkEsef(a.companyId);
+    refreshCompanies();
+    notesChanged(a.companyId);
+  });
+  handle('esef:filings', (a: { companyId: number }) => research.listEsefFilings(a.companyId));
+  handle('esef:sync', (a: { companyId: number; force?: boolean }) =>
+    providerGuard('filings.xbrl.org', async () => {
+      const company = companiesCache.find((c) => c.id === a.companyId);
+      if (!company?.lei) throw new ValidationError('Vincula primero la empresa con su identificador LEI.');
+      const list = await esef.filings(company.lei, a.force);
+      if (!list.data.length) throw new ValidationError('filings.xbrl.org no tiene informes anuales de esta entidad.');
+      const chosen = pickAnnualFilings(list.data, 6);
+      const reports = [];
+      for (const f of chosen) {
+        try {
+          reports.push({ filing: f, facts: (await esef.reportFacts(f)).facts });
+        } catch (err) {
+          // One broken report must not hide the others; stop only on connection problems.
+          if (err instanceof ProviderError && (err.code === 'network' || err.code === 'rate-limited') && reports.length === 0) throw err;
+          logError('esef-report', err);
+        }
+      }
+      if (!reports.length) throw new ValidationError('No se pudo leer ningún informe de esta entidad.');
+      const entityName = list.data.find((f) => f.entityName)?.entityName ?? company.esefName;
+      const norm = normalizeCompanyFacts(toCompanyFacts(company.lei, entityName, reports), 10);
+      const country = list.data[0]?.country ?? countryOf(company);
+      research.linkEsef(company.id, company.lei, entityName ?? null, country);
+      research.saveEsef(company.id, list.data, new Set(reports.map((r) => r.filing.fxoId)), { ...norm, entityName: entityName ?? null }, list.fetchedAt);
+      refreshCompanies();
+      notesChanged(company.id);
+      return {
+        facts: norm.facts.length,
+        periods: [...new Set(norm.facts.map((f) => f.period))],
+        missing: norm.missing,
+        restated: norm.facts.filter((f) => f.restatedFrom).length,
+        filings: reports.length,
+        entityName: entityName ?? null,
+        fromCache: list.fromCache,
+        stale: list.stale,
+        fetchedAt: list.fetchedAt,
+      };
+    }),
+  );
 }
 
 // ---------------------------------------------------------------- SEC EDGAR

@@ -3380,3 +3380,11 @@ button {
 .table-wrap > .fin-table td {
   white-space: nowrap;
 }
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
+.btn-ghost:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}

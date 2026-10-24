@@ -4,7 +4,8 @@
  */
 import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
-import type { Company, FilingRow, FinancialFact, InsiderRow, Note, NoteKind, Source } from '../shared/types';
+import type { Company, EsefFilingRow, FilingRow, FinancialFact, InsiderRow, Note, NoteKind, Source } from '../shared/types';
+import { ESEF_BASE, LEI_RE, type EsefFiling } from '../shared/esef';
 import { ownerRole, type Form4 } from '../shared/form4';
 import { filingIndexUrl, type NormalizeResult, type SubmissionsInfo } from '../shared/xbrl';
 import { CompanyInputSchema, NoteInputSchema, type CompanyInput, type NoteInput } from '../shared/ipc';
@@ -36,6 +37,9 @@ interface CompanyRow {
   fiscal_year_end: string | null;
   sec_synced_at: number | null;
   sec_taxonomy: string | null;
+  lei: string | null;
+  esef_name: string | null;
+  esef_synced_at: number | null;
   created_at: number;
   updated_at: number;
   note_count: number;
@@ -75,6 +79,9 @@ function toCompany(r: CompanyRow): Company {
     fiscalYearEnd: r.fiscal_year_end,
     secSyncedAt: r.sec_synced_at,
     secTaxonomy: r.sec_taxonomy,
+    lei: r.lei ?? null,
+    esefName: r.esef_name ?? null,
+    esefSyncedAt: r.esef_synced_at ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     noteCount: Number(r.note_count ?? 0),
@@ -337,6 +344,95 @@ export class ResearchRepo {
     ).map((f) => ({ ...f, derived: !!f.derived }));
   }
 
+  // ---------------- official data (ESEF, Europe) ----------------
+  linkEsef(companyId: number, lei: string, name: string | null, country: string | null): Company {
+    const c = this.getCompany(companyId);
+    if (!c) throw new ValidationError('La empresa no existe.');
+    if (!LEI_RE.test(lei)) throw new ValidationError('LEI no válido.');
+    this.db
+      .prepare(
+        `UPDATE companies SET lei = ?, esef_name = ?,
+           country = CASE WHEN country = '' AND ? IS NOT NULL THEN ? ELSE country END,
+           updated_at = ? WHERE id = ?`,
+      )
+      .run(lei, name?.slice(0, 200) ?? null, country, country, Date.now(), companyId);
+    return this.getCompany(companyId)!;
+  }
+
+  unlinkEsef(companyId: number): void {
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare("DELETE FROM financial_facts WHERE company_id = ? AND provider = 'esef'").run(companyId);
+      this.db.prepare('DELETE FROM esef_filings WHERE company_id = ?').run(companyId);
+      this.db.prepare('UPDATE companies SET lei = NULL, esef_name = NULL, esef_synced_at = NULL, updated_at = ? WHERE id = ?').run(Date.now(), companyId);
+      this.db.exec('COMMIT');
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
+    }
+  }
+
+  /** Replace the ESEF figures and filing list of a company atomically. */
+  saveEsef(companyId: number, filings: EsefFiling[], used: Set<string>, result: NormalizeResult, fetchedAt: number): void {
+    const viewer = new Map(filings.map((f) => [f.fxoId, f.viewerUrl ?? ESEF_BASE]));
+    const insFact = this.db.prepare(
+      `INSERT INTO financial_facts(company_id, provider, metric, period, period_start, period_end, value, unit, currency, concept,
+         accn, form, filed, derived, restated_value, restated_accn, restated_filed, source_url, fetched_at)
+       VALUES(?, 'esef', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    const insFiling = this.db.prepare(
+      `INSERT INTO esef_filings(company_id, fxo_id, period_end, country, published, processed, viewer_url, used) VALUES(?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare("DELETE FROM financial_facts WHERE company_id = ? AND provider = 'esef'").run(companyId);
+      this.db.prepare('DELETE FROM esef_filings WHERE company_id = ?').run(companyId);
+      for (const f of filings)
+        insFiling.run(companyId, f.fxoId, f.periodEnd, f.country, f.published, f.processed, f.viewerUrl && isSafeWebUrl(f.viewerUrl) ? f.viewerUrl : null, used.has(f.fxoId) ? 1 : 0);
+      for (const f of result.facts) {
+        const url = viewer.get(f.accn) ?? ESEF_BASE;
+        insFact.run(
+          companyId,
+          f.metric,
+          f.period,
+          f.periodStart,
+          f.periodEnd,
+          f.value,
+          f.unit,
+          f.currency,
+          f.concept,
+          f.accn,
+          f.form,
+          f.filed,
+          Number(f.derived),
+          f.restatedFrom?.value ?? null,
+          f.restatedFrom?.accn ?? null,
+          f.restatedFrom?.filed ?? null,
+          isSafeWebUrl(url) ? url : ESEF_BASE,
+          fetchedAt,
+        );
+      }
+      this.db
+        .prepare('UPDATE companies SET esef_synced_at = ?, esef_name = COALESCE(?, esef_name), updated_at = ? WHERE id = ?')
+        .run(fetchedAt, result.entityName, Date.now(), companyId);
+      this.db.exec('COMMIT');
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
+    }
+  }
+
+  listEsefFilings(companyId: number): EsefFilingRow[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT fxo_id AS fxoId, period_end AS periodEnd, country, published, processed, viewer_url AS viewerUrl, used
+           FROM esef_filings WHERE company_id = ? ORDER BY period_end DESC, processed DESC`,
+        )
+        .all(companyId) as unknown as EsefFilingRow[]
+    ).map((r) => ({ ...r, used: !!r.used }));
+  }
+
   // ---------------- insiders (Form 4) ----------------
   /** Form 4/4-A filings not yet processed, newest first. */
   pendingForm4(companyId: number, limit: number): { accn: string; filingDate: string; primaryDocument: string | null; url: string }[] {
@@ -537,6 +633,7 @@ export class ResearchRepo {
         sectorKind: c.sectorKind,
         irUrl: c.irUrl,
         cik: c.cik,
+        lei: c.lei,
         color: c.color,
         thesis: c.thesis,
         price: c.price === null ? null : { value: c.price, currency: c.priceCurrency, asOf: c.priceAsOf, source: c.priceSource },
@@ -616,6 +713,7 @@ export class ResearchRepo {
             color: c.color,
             thesis: c.thesis ?? '',
           });
+          if (c.lei) target = this.linkEsef(target.id, c.lei, null, null);
           companies++;
         }
         for (const n of c.notes) {
@@ -688,6 +786,7 @@ export const ResearchExportSchema = z.object({
         sectorKind: z.enum(['general', 'bank', 'insurer', 'reit']).optional(),
         irUrl: z.string().max(8192).nullable().optional(),
         cik: z.string().regex(/^\d{1,10}$/).nullable().optional(),
+        lei: z.string().regex(/^[A-Z0-9]{18}[0-9]{2}$/).nullable().optional(),
         color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
         thesis: z.string().max(50_000).optional(),
         price: z.unknown().optional(),

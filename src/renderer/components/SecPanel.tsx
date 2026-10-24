@@ -23,8 +23,8 @@ export function SecContactForm({ onSaved, compact }: { onSaved?: () => void; com
     <div className={`sec-consent ${compact ? 'compact' : ''}`} data-testid="sec-consent">
       {!compact && (
         <p className="small">
-          <ShieldCheck size={13} /> La SEC exige que las herramientas automáticas se identifiquen con un <strong>nombre y un correo</strong>. Solo se enviará a <code>sec.gov</code> y <code>data.sec.gov</code>, junto con
-          las consultas que pidas (ticker o CIK). Nada más sale de tu equipo.
+          <ShieldCheck size={13} /> La SEC y filings.xbrl.org piden que las herramientas automáticas se identifiquen con un <strong>nombre y un correo</strong>. Solo se enviará a <code>sec.gov</code>,{' '}
+          <code>data.sec.gov</code> y <code>filings.xbrl.org</code>, junto con las consultas que pidas (ticker, CIK, nombre o LEI). Nada más sale de tu equipo.
         </p>
       )}
       <div className="sec-consent-row">

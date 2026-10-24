@@ -31,6 +31,7 @@ export type MetricId =
   | 'sbc'
   | 'income_tax'
   | 'pretax_income'
+  | 'dna'
   | 'other';
 
 export interface MetricDef {
@@ -67,6 +68,7 @@ export const METRICS: readonly MetricDef[] = [
   { id: 'sbc', label: 'Remuneración en acciones (SBC)', short: 'SBC', kind: 'flow', group: 'detail' },
   { id: 'income_tax', label: 'Impuesto sobre beneficios', short: 'Impuestos', kind: 'flow', group: 'detail' },
   { id: 'pretax_income', label: 'Beneficio antes de impuestos', short: 'BAI', kind: 'flow', group: 'detail' },
+  { id: 'dna', label: 'Amortizaciones y depreciaciones', short: 'D&A', kind: 'flow', group: 'detail' },
   { id: 'other', label: 'Otra cifra', short: 'Otra', kind: 'flow' },
 ];
 export const METRIC_IDS = METRICS.map((m) => m.id) as [MetricId, ...MetricId[]];
@@ -93,7 +95,7 @@ export interface Figure {
   detail?: string | null;
   /** True when a later filing changed the value for this period. */
   restated?: boolean;
-  provider?: 'sec' | null;
+  provider?: 'sec' | 'esef' | null;
 }
 
 // ---------------------------------------------------------------- periods
@@ -203,7 +205,7 @@ export interface ResolvedValue {
   sources: { url?: string | null; title?: string | null }[];
   detail?: string | null;
   restated?: boolean;
-  provider?: 'sec' | null;
+  provider?: 'sec' | 'esef' | null;
 }
 
 export type FigureTable = Map<string, Map<MetricId, ResolvedValue>>; // period → metric → value

@@ -30,6 +30,7 @@ export interface SessionSnapshot {
 }
 
 /** Ordered list of migrations. Never edit a released migration — append a new one. */
+export const SCHEMA_VERSION_COUNT = () => MIGRATIONS.length;
 const MIGRATIONS: string[] = [
   /* v1 — Phase 1: browser core */ `
   CREATE TABLE kv (
@@ -205,6 +206,22 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (company_id, accn, seq)
   );
   CREATE INDEX insider_tx_date ON insider_transactions(company_id, tx_date DESC);
+  `,
+  /* v5 — European official annual reports (ESEF via filings.xbrl.org) */ `
+  ALTER TABLE companies ADD COLUMN lei TEXT;
+  ALTER TABLE companies ADD COLUMN esef_name TEXT;
+  ALTER TABLE companies ADD COLUMN esef_synced_at INTEGER;
+  CREATE TABLE esef_filings (
+    company_id  INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    fxo_id      TEXT    NOT NULL,
+    period_end  TEXT    NOT NULL,
+    country     TEXT,
+    published   TEXT,
+    processed   TEXT,
+    viewer_url  TEXT,
+    used        INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (company_id, fxo_id)
+  );
   `,
 ];
 

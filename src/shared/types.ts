@@ -215,6 +215,10 @@ export interface Company {
   fiscalYearEnd: string | null;
   secSyncedAt: number | null;
   secTaxonomy: string | null;
+  /** Legal Entity Identifier, used for European official reports (ESEF). */
+  lei: string | null;
+  esefName: string | null;
+  esefSyncedAt: number | null;
   createdAt: number;
   updatedAt: number;
   noteCount: number;
@@ -255,7 +259,7 @@ export interface Source {
 export interface FinancialFact {
   id: number;
   companyId: number;
-  provider: 'sec';
+  provider: 'sec' | 'esef';
   metric: string;
   period: string;
   periodStart: string | null;
@@ -321,6 +325,29 @@ export interface SecStatus {
   lastError: string | null;
   cacheEntries: number;
   cacheBytes: number;
+}
+
+export interface EsefFilingRow {
+  fxoId: string;
+  periodEnd: string;
+  country: string | null;
+  published: string | null;
+  processed: string | null;
+  viewerUrl: string | null;
+  /** Whether its figures were imported (the latest version per year). */
+  used: boolean;
+}
+
+export interface EsefSyncResult {
+  facts: number;
+  periods: string[];
+  missing: string[];
+  restated: number;
+  filings: number;
+  entityName: string | null;
+  fromCache: boolean;
+  stale: boolean;
+  fetchedAt: number;
 }
 
 export interface SecSyncResult {
