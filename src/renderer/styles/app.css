@@ -3726,3 +3726,111 @@ th[aria-sort='descending'] .th-sort::after {
 .pf-summary .kpi-sub {
   white-space: normal;
 }
+
+/* ---- screener ---- */
+.scr-coverage {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  margin-bottom: 12px;
+}
+.scr-presets {
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 4px;
+}
+.scr-presets button {
+  padding: 4px 10px;
+}
+.scr-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+.scr-range {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.input.input-sm {
+  height: 28px;
+  padding: 3px 8px;
+  font-size: 12.5px;
+}
+.scr-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.scr-count {
+  margin-left: auto;
+  align-self: center;
+}
+.scr-table td,
+.scr-table th {
+  white-space: nowrap;
+}
+.scr-row {
+  cursor: pointer;
+}
+.scr-axes {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.scr-scatter svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.scr-dot {
+  cursor: pointer;
+}
+.scr-progress {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+.scr-report {
+  position: absolute;
+  right: 24px;
+  top: 64px;
+  z-index: 5;
+  max-width: 420px;
+  max-height: 320px;
+  overflow: auto;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+.scr-report ul {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+.scr-foot {
+  margin: 12px auto 0;
+}
+.page.screener {
+  position: relative;
+}
+.scr-table th.l,
+.scr-table td.l,
+.pf-table th.l,
+.pf-table td.l {
+  text-align: left;
+}
+.scr-range .input-xs {
+  width: 84px;
+}
+.scr-presets button {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.scr-presets button.is-on {
+  border-color: var(--accent);
+}
