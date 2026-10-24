@@ -4,7 +4,8 @@
  */
 import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
-import type { Company, Note, NoteKind, Source } from '../shared/types';
+import type { Company, FilingRow, FinancialFact, Note, NoteKind, Source } from '../shared/types';
+import { filingIndexUrl, type NormalizeResult, type SubmissionsInfo } from '../shared/xbrl';
 import { CompanyInputSchema, NoteInputSchema, type CompanyInput, type NoteInput } from '../shared/ipc';
 import { isSafeWebUrl } from '../shared/url';
 import { normalizeTicker } from '../shared/sources';
@@ -30,6 +31,10 @@ interface CompanyRow {
   price_as_of: string | null;
   price_source: string | null;
   saved_tabs: string;
+  sec_name: string | null;
+  fiscal_year_end: string | null;
+  sec_synced_at: number | null;
+  sec_taxonomy: string | null;
   created_at: number;
   updated_at: number;
   note_count: number;
@@ -65,6 +70,10 @@ function toCompany(r: CompanyRow): Company {
     priceAsOf: r.price_as_of,
     priceSource: r.price_source,
     savedTabs,
+    secName: r.sec_name,
+    fiscalYearEnd: r.fiscal_year_end,
+    secSyncedAt: r.sec_synced_at,
+    secTaxonomy: r.sec_taxonomy,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     noteCount: Number(r.note_count ?? 0),
@@ -211,6 +220,120 @@ export class ResearchRepo {
   setSavedTabs(id: number, tabs: { url: string; title: string }[]): void {
     const safe = tabs.filter((t) => isSafeWebUrl(t.url)).slice(0, 100);
     this.db.prepare('UPDATE companies SET saved_tabs=?, updated_at=? WHERE id=?').run(JSON.stringify(safe), Date.now(), id);
+  }
+
+  // ---------------- official data (SEC) ----------------
+  /** Link a company to its SEC registration; fills only fields the user left empty. */
+  linkSec(companyId: number, info: SubmissionsInfo): Company {
+    const c = this.getCompany(companyId);
+    if (!c) throw new ValidationError('La empresa no existe.');
+    const cik = String(Number(info.cik));
+    if (!/^\d{1,10}$/.test(cik)) throw new ValidationError('CIK no válido.');
+    this.db
+      .prepare(
+        `UPDATE companies SET cik = ?, sec_name = ?, fiscal_year_end = ?,
+           exchange = CASE WHEN exchange = '' THEN ? ELSE exchange END,
+           sector = CASE WHEN sector = '' THEN ? ELSE sector END,
+           country = CASE WHEN country = '' AND ? <> '' THEN 'EE. UU.' ELSE country END,
+           updated_at = ? WHERE id = ?`,
+      )
+      .run(
+        cik,
+        info.name || null,
+        info.fiscalYearEnd,
+        (info.exchanges[0] ?? '').toUpperCase().slice(0, 40),
+        (info.sicDescription ?? '').slice(0, 80),
+        info.stateOfIncorporation && /^[A-Z]{2}$/.test(info.stateOfIncorporation) ? 'us' : '',
+        Date.now(),
+        companyId,
+      );
+    this.saveFilings(companyId, info);
+    return this.getCompany(companyId)!;
+  }
+
+  saveFilings(companyId: number, info: SubmissionsInfo): void {
+    const ins = this.db.prepare(
+      `INSERT INTO filings(company_id, accn, form, filing_date, report_date, description, url) VALUES(?,?,?,?,?,?,?)
+       ON CONFLICT(company_id, accn) DO UPDATE SET form=excluded.form, filing_date=excluded.filing_date,
+         report_date=excluded.report_date, description=excluded.description, url=excluded.url`,
+    );
+    this.db.exec('BEGIN');
+    try {
+      for (const f of info.filings) {
+        if (!f.url.startsWith('https://www.sec.gov/Archives/edgar/data/')) continue;
+        ins.run(companyId, f.accn, f.form, f.filingDate, f.reportDate, f.description, f.url);
+      }
+      this.db.exec('COMMIT');
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
+    }
+  }
+
+  listFilings(companyId: number, limit = 200): FilingRow[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT accn, form, filing_date AS filingDate, report_date AS reportDate, description, url
+           FROM filings WHERE company_id = ? ORDER BY filing_date DESC, accn DESC LIMIT ?`,
+        )
+        .all(companyId, limit) as unknown as FilingRow[]
+    ).map((f) => ({ ...f }));
+  }
+
+  /** Replace the SEC figures of a company atomically with a fresh normalisation. */
+  saveSecFacts(companyId: number, cik: string | number, result: NormalizeResult, fetchedAt: number): void {
+    const ins = this.db.prepare(
+      `INSERT INTO financial_facts(company_id, provider, metric, period, period_start, period_end, value, unit, currency, concept,
+         accn, form, filed, derived, restated_value, restated_accn, restated_filed, source_url, fetched_at)
+       VALUES(?, 'sec', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare("DELETE FROM financial_facts WHERE company_id = ? AND provider = 'sec'").run(companyId);
+      for (const f of result.facts) {
+        ins.run(
+          companyId,
+          f.metric,
+          f.period,
+          f.periodStart,
+          f.periodEnd,
+          f.value,
+          f.unit,
+          f.currency,
+          f.concept,
+          f.accn,
+          f.form,
+          f.filed,
+          Number(f.derived),
+          f.restatedFrom?.value ?? null,
+          f.restatedFrom?.accn ?? null,
+          f.restatedFrom?.filed ?? null,
+          filingIndexUrl(cik, f.accn),
+          fetchedAt,
+        );
+      }
+      this.db
+        .prepare('UPDATE companies SET sec_synced_at = ?, sec_taxonomy = ?, sec_name = COALESCE(?, sec_name), updated_at = ? WHERE id = ?')
+        .run(fetchedAt, result.taxonomy, result.entityName, Date.now(), companyId);
+      this.db.exec('COMMIT');
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
+    }
+  }
+
+  listFacts(companyId: number): FinancialFact[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT id, company_id AS companyId, provider, metric, period, period_start AS periodStart, period_end AS periodEnd, value, unit,
+                  currency, concept, accn, form, filed, derived, restated_value AS restatedValue, restated_accn AS restatedAccn,
+                  restated_filed AS restatedFiled, source_url AS sourceUrl, fetched_at AS fetchedAt
+           FROM financial_facts WHERE company_id = ? ORDER BY period_end, metric`,
+        )
+        .all(companyId) as unknown as FinancialFact[]
+    ).map((f) => ({ ...f, derived: !!f.derived }));
   }
 
   // ---------------- sources ----------------

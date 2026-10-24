@@ -8,11 +8,22 @@ Comprobado el 23/10/2026. Las condiciones cambian: cada proveedor guardará en l
 
 | Fuente | Datos | Acceso | Límites y condiciones | Uso previsto |
 | --- | --- | --- | --- | --- |
-| **SEC EDGAR** (`data.sec.gov`) | 10-K, 10-Q, 8-K, Form 4, hechos XBRL (`companyfacts`, `companyconcept`, `frames`), `submissions` | Sin clave. JSON | Máx. **10 peticiones/s**; cabecera `User-Agent` con nombre y correo de contacto; descargar solo lo necesario. Fuente: [Accessing EDGAR Data](https://www.sec.gov/os/accessing-edgar-data) | **Fase 3, primer proveedor.** Datos normalizados con referencia al formulario (`accn`), periodo fiscal y unidad. |
+| **SEC EDGAR** (`data.sec.gov`) ✅ implementado | 10-K, 10-Q, 8-K, Form 4, hechos XBRL (`companyfacts`, `companyconcept`, `frames`), `submissions` | Sin clave. JSON | Máx. **10 peticiones/s**; cabecera `User-Agent` con nombre y correo de contacto; descargar solo lo necesario. Fuente: [Accessing EDGAR Data](https://www.sec.gov/os/accessing-edgar-data) | v0.3.0: `company_tickers.json`, `submissions` y `companyfacts`. Ver «Cómo usa la app la SEC». |
 | Informes de empresa (IR) | Informes anuales y trimestrales de cualquier país | Navegación normal + cuaderno manual | Las del propio sitio | Fase 2: guardar fragmentos y cifras con URL y fecha de consulta. Sin extracción automática no verificada. |
 | ESMA / registros nacionales (CNMV, etc.) | Información regulada europea | Web pública; algunos registros ofrecen descargas | Variables por país; muchos sin API | Enlaces directos desde la app; integración solo donde haya acceso permitido documentado. |
 
 **Riesgo XBRL:** las etiquetas varían entre empresas y años (`Revenues` vs `RevenueFromContractWithCustomerExcludingAssessedTax`…). El normalizador debe registrar qué etiqueta usó y dejar el campo vacío —nunca a cero— si no hay correspondencia segura.
+
+### Cómo usa la app la SEC (v0.3.0)
+
+- Formatos comprobados con respuestas reales:
+  - `company_tickers.json`: `{"0":{"cik_str":…,"ticker":…,"title":…}}`.
+  - `submissions`: `cik` con ceros y `filings.recent` en arrays por columnas.
+  - `companyconcept`/`companyfacts`: hechos `{start?, end, val, accn, fy, fp, form, filed, frame?}`.
+- `fy`/`fp` describen el documento que presenta el dato, no el periodo. Un 10-K de 2009 presenta el saldo de 2008 con `fy: 2009`. Por eso el periodo se calcula con `start`/`end`.
+- Un periodo es anual si dura entre 350 y 380 días. El ejercicio se etiqueta por el año natural en que termina, salvo los que terminan en los primeros días de enero, que cuentan como del año anterior.
+- Si varios documentos presentan el mismo periodo, gana el más reciente. Si el valor cambió, se marca como re-expresado.
+- Los conceptos usados para cada métrica, por orden de preferencia, están en `CONCEPT_MAP` (`src/shared/xbrl.ts`). Se aceptan PR con conceptos adicionales y su justificación.
 
 ## Macro
 

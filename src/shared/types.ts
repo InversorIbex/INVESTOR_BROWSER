@@ -32,6 +32,8 @@ const SettingsFields = {
   blockPopupWindows: z.boolean(),
   homePage: z.string().max(8192),
   toolbar: ToolbarFields,
+  /** "Name email" sent to the SEC as required by its fair-access policy. Empty = no SEC requests. */
+  secContact: z.string().max(160),
 };
 
 export const DEFAULT_SETTINGS = {
@@ -49,6 +51,7 @@ export const DEFAULT_SETTINGS = {
   blockPopupWindows: false,
   homePage: NEW_TAB_URL,
   toolbar: { home: false, bookmarkStar: true, downloads: true, palette: true, rightPanel: true },
+  secContact: '',
 } as const satisfies z.infer<z.ZodObject<typeof SettingsFields>>;
 
 /** Full settings object, as stored. */
@@ -208,6 +211,10 @@ export interface Company {
   priceAsOf: string | null;
   priceSource: string | null;
   savedTabs: { url: string; title: string }[];
+  secName: string | null;
+  fiscalYearEnd: string | null;
+  secSyncedAt: number | null;
+  secTaxonomy: string | null;
   createdAt: number;
   updatedAt: number;
   noteCount: number;
@@ -242,6 +249,59 @@ export interface Source {
   title: string;
   accessedAt: number;
   noteCount: number;
+}
+
+/** A value obtained from an official provider (e.g. SEC EDGAR XBRL). */
+export interface FinancialFact {
+  id: number;
+  companyId: number;
+  provider: 'sec';
+  metric: string;
+  period: string;
+  periodStart: string | null;
+  periodEnd: string;
+  value: number;
+  unit: string;
+  currency: string | null;
+  concept: string;
+  accn: string;
+  form: string;
+  filed: string;
+  derived: boolean;
+  restatedValue: number | null;
+  restatedAccn: string | null;
+  restatedFiled: string | null;
+  sourceUrl: string;
+  fetchedAt: number;
+}
+
+export interface FilingRow {
+  accn: string;
+  form: string;
+  filingDate: string;
+  reportDate: string | null;
+  description: string | null;
+  url: string;
+}
+
+export interface SecStatus {
+  contactSet: boolean;
+  requestsMade: number;
+  lastError: string | null;
+  cacheEntries: number;
+  cacheBytes: number;
+}
+
+export interface SecSyncResult {
+  facts: number;
+  periods: string[];
+  missing: string[];
+  restated: number;
+  taxonomy: string | null;
+  entityName: string | null;
+  fromCache: boolean;
+  stale: boolean;
+  fetchedAt: number;
 }
 
 /** Sent by main when the user asks to save something from a page. */

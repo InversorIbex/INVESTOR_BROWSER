@@ -48,9 +48,9 @@ export function newProfileDir(): string {
   return mkdtempSync(path.join(tmpdir(), 'ib-e2e-'));
 }
 
-export async function launch(profile: string): Promise<{ app: ElectronApplication; ui: Page }> {
+export async function launch(profile: string, extraEnv: Record<string, string> = {}): Promise<{ app: ElectronApplication; ui: Page }> {
   const downloads = path.join(profile, 'Downloads');
-  const env = { ...process.env, IB_USER_DATA: profile, IB_DOWNLOADS_DIR: downloads } as Record<string, string>;
+  const env = { ...process.env, IB_USER_DATA: profile, IB_DOWNLOADS_DIR: downloads, ...extraEnv } as Record<string, string>;
   delete env.NODE_OPTIONS;
   const app = await electron.launch({ args: [path.resolve('.')], env });
   const ui = await waitForUi(app);

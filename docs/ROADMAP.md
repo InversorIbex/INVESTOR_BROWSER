@@ -37,9 +37,19 @@ Entorno, versiones, arquitectura ([ARCHITECTURE.md](ARCHITECTURE.md)), fuentes (
 
 Múltiplos, DCF con escenarios y sensibilidad, adaptación sectorial; DCF contrastado con cálculo a mano en tests. Pendiente: comparación histórica de múltiplos (necesita cotizaciones históricas legítimas).
 
-## Fase 3 — Datos SEC EDGAR
+## Fase 3 — Datos SEC EDGAR ✅ (v0.3.0)
 
-Proveedor EDGAR (`companyfacts`, `submissions`) con `User-Agent` configurable por el usuario, límite ≤ 10 req/s, caché, normalización con procedencia, métricas calculadas con fórmula visible. Validación contra 3 informes 10-K reales.
+| Criterio | Estado | Verificación |
+| --- | --- | --- |
+| Proveedor gratuito sin clave (`company_tickers`, `submissions`, `companyfacts`) | ✅ | Formatos verificados contra respuestas reales de la SEC (oct. 2026) |
+| User-Agent con contacto; ninguna petición sin él | ✅ | Unit + E2E (servidor simulado registra cabeceras) |
+| ≤ 10 peticiones/s | ✅ | Unit + E2E (intervalo medido en el servidor ≥ 100 ms) |
+| Caché, copia fechada sin conexión, errores claros | ✅ | Unit + E2E (servidor apagado) |
+| Datos normalizados con procedencia y fecha | ✅ | Unit (fixture con trampas reales) + E2E |
+| No rellenar huecos con ceros | ✅ | Unit + E2E |
+| Validación contra 10-K reales en vivo | ⚠️ Pendiente | El entorno de desarrollo no tiene acceso de red a sec.gov. Comprobar en un equipo real con 3 empresas (p. ej. MSFT, KO, NVO) frente a sus 10-K/20-F. |
+
+Pendiente para fases posteriores: cifras trimestrales y TTM, segmentos, notas de deuda (arrendamientos), Form 4 estructurado (Insider Tracker).
 
 ## Fase 4 — Herramientas
 
@@ -60,7 +70,8 @@ Firma de código, actualizaciones firmadas, fuses de Electron, pruebas en Window
 | Instalador sin firma → aviso de SmartScreen | Alto para adopción | Documentado; firma antes de v1.0 |
 | `node:sqlite` aún marcado como en evolución por Node | Medio | Encapsulado en `db.ts`; tests de persistencia; driver sustituible |
 | Webs que detectan navegadores «no Chrome» | Bajo | UA sin token Electron |
-| Variación de etiquetas XBRL | Alto (Fase 3) | Mapa de etiquetas versionado, campos vacíos en vez de ceros, procedencia por cifra |
+| Variación de etiquetas XBRL | Alto | Mapa de conceptos por prioridad (`src/shared/xbrl.ts`), conceptos usados visibles en cada cifra, campos vacíos en vez de ceros |
+| Periodo mal asignado por usar `fy` | Alto | Periodos derivados solo de fechas; test con comparativas reales `fy ≠ periodo` |
 | Cambios de condiciones de fuentes de datos | Medio | Fecha de verificación por proveedor; degradación a «no disponible» |
 | Ventanas emergentes de inicio de sesión que dependen de `window.opener` | Bajo | Se permiten como ventanas sandbox; bloqueables en Ajustes |
 | Atajos de teclado en distribuciones donde `Ctrl+\` requiere AltGr (teclado español) | Bajo | Alternativa `F11` |

@@ -8,6 +8,10 @@ import { COMMAND_IDS, type CommandId } from './commands';
 import { SettingsPatchSchema, NOTE_KINDS, SECTOR_KINDS } from './types';
 import { METRIC_IDS, SCALES, type Scale } from './finance';
 import type {
+  FilingRow,
+  FinancialFact,
+  SecStatus,
+  SecSyncResult,
   Company,
   Note,
   SaveDraft,
@@ -67,7 +71,7 @@ export type NoteInput = z.input<typeof NoteInputSchema>;
 
 export const RequestSchemas = {
   'state:get': z.undefined(),
-  'tabs:create': z.object({ url: UrlText.optional(), active: z.boolean().optional() }).strict(),
+  'tabs:create': z.object({ url: UrlText.optional(), active: z.boolean().optional(), companyId: z.number().int().positive().optional() }).strict(),
   'tabs:close': z.object({ id: Id }).strict(),
   'tabs:activate': z.object({ id: Id }).strict(),
   'tabs:navigate': z.object({ id: Id.optional(), input: UrlText }).strict(),
@@ -136,6 +140,14 @@ export const RequestSchemas = {
   'research:captureSelection': z.undefined(),
   'research:export': z.object({ companyId: PosInt.optional(), format: z.enum(['markdown', 'json']) }).strict(),
   'research:import': z.undefined(),
+  // ---- official data: SEC EDGAR ----
+  'sec:status': z.undefined(),
+  'sec:searchTicker': z.object({ query: z.string().trim().min(1).max(60) }).strict(),
+  'sec:link': z.object({ companyId: PosInt, cik: z.number().int().positive().max(9_999_999_999) }).strict(),
+  'sec:sync': z.object({ companyId: PosInt, force: z.boolean().optional() }).strict(),
+  'sec:facts': z.object({ companyId: PosInt }).strict(),
+  'sec:filings': z.object({ companyId: PosInt }).strict(),
+  'sec:clearCache': z.undefined(),
 } as const;
 
 export type RequestChannel = keyof typeof RequestSchemas;
@@ -190,6 +202,13 @@ export interface ResponseMap {
   'research:captureSelection': void;
   'research:export': void;
   'research:import': void;
+  'sec:status': SecStatus;
+  'sec:searchTicker': { cik: number; ticker: string; title: string }[];
+  'sec:link': Company;
+  'sec:sync': SecSyncResult;
+  'sec:facts': FinancialFact[];
+  'sec:filings': FilingRow[];
+  'sec:clearCache': void;
 }
 
 export interface EventMap {

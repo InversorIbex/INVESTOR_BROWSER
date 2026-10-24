@@ -9,6 +9,8 @@ import { TabManager, internalTitle, WEB_PARTITION } from './tabs';
 import { configureWebSession, confirmExternal, installGlobalGuards, isTrustedUiUrl } from './security';
 import { DownloadManager } from './downloads';
 import { ResearchRepo, ValidationError } from './research';
+import { isValidContact, SecClient, SecError } from './sec';
+import { normalizeCompanyFacts, parseSubmissions, parseTickerFile, searchTickers, type CompanyFacts } from '../shared/xbrl';
 import { logError } from './log';
 import { BRAND } from '../shared/brand';
 import { COMMANDS, UI_COMMANDS, commandForInput, tabIndexForInput, type CommandId, type KeyInput } from '../shared/commands';
@@ -42,6 +44,7 @@ let downloads: DownloadManager;
 let settings: Settings;
 let popups: PopupNotice[] = [];
 let research: ResearchRepo;
+let sec: SecClient;
 let companiesCache: Company[] = [];
 let stateQueued = false;
 let saveTimer: NodeJS.Timeout | null = null;
@@ -66,6 +69,7 @@ async function bootstrap(): Promise<void> {
   nativeTheme.themeSource = themeSourceFor(settings.theme);
 
   const webSession = configureWebSession({ store, win: () => win });
+  sec = createSecClient();
   downloads = new DownloadManager(store, {
     win: () => win,
     askLocation: () => settings.askDownloadLocation,
@@ -335,6 +339,8 @@ function uiCommand(id: CommandId): void {
 }
 
 function updateSettings(patch: Partial<Settings>): Settings {
+  if (patch.secContact !== undefined && patch.secContact.trim() && !isValidContact(patch.secContact))
+    throw new Error('Escribe tu nombre y un correo, por ejemplo: «Ana Pérez ana@ejemplo.com».');
   settings = store.updateSettings(patch);
   if (patch.theme) nativeTheme.themeSource = themeSourceFor(settings.theme);
   send('settings', settings);
@@ -626,9 +632,9 @@ function handle<C extends RequestChannel>(channel: C, fn: Handler<C>): void {
 
 function registerIpc(): void {
   handle('state:get', () => tabs.snapshot());
-  handle('tabs:create', (a: { url?: string; active?: boolean }) => {
+  handle('tabs:create', (a: { url?: string; active?: boolean; companyId?: number }) => {
     const url = a.url ? normalizeInput(a.url, settings.searchEngine).url : NEW_TAB_URL;
-    return tabs.create({ url, active: a.active });
+    return tabs.create({ url, active: a.active, companyId: a.companyId ?? null });
   });
   handle('tabs:close', (a: { id: string }) => tabs.close(a.id));
   handle('tabs:activate', (a: { id: string }) => tabs.activate(a.id));
@@ -704,6 +710,7 @@ function registerIpc(): void {
     dbPath: store.path,
   }));
   registerResearchIpc();
+  registerSecIpc();
   handle('data:clear', async (a: { what: 'cache' | 'siteData' }) => {
     const ses = session.fromPartition(WEB_PARTITION);
     if (a.what === 'cache') {
@@ -910,4 +917,84 @@ async function backupData(): Promise<void> {
     logError('backup', err);
     send('toast', { message: 'No se pudo crear la copia de seguridad.', kind: 'error' });
   }
+}
+
+// ---------------------------------------------------------------- SEC EDGAR
+
+function createSecClient(): SecClient {
+  // A dedicated, cookie-less network session: SEC traffic never mixes with browsing.
+  const secSession = session.fromPartition('sec-data');
+  secSession.setPermissionRequestHandler((_wc, _p, cb) => cb(false));
+  return new SecClient({
+    fetch: async (url, init) => {
+      const res = await secSession.fetch(url, { headers: init.headers, signal: init.signal, credentials: 'omit' });
+      // Redirects are only acceptable within the SEC (or the loopback test server).
+      const finalHost = new URL(res.url || url).hostname;
+      if (!(finalHost === 'sec.gov' || finalHost.endsWith('.sec.gov') || finalHost === '127.0.0.1')) throw new Error('Redirección fuera de sec.gov');
+      return { status: res.status, headers: res.headers, text: () => res.text() };
+    },
+    cache: { get: (k) => store.cacheGet('sec', k), set: (k, b, t) => store.cacheSet('sec', k, b, t) },
+    contact: () => settings.secContact,
+    appVersion: app.getVersion(),
+    // Test hook: only honoured for a loopback http URL (see resolveBaseUrls).
+    baseOverride: process.env.IB_SEC_BASE_URL ?? null,
+  });
+}
+
+function secGuard<T>(fn: () => Promise<T>): Promise<T> {
+  return fn().catch((err: unknown) => {
+    if (err instanceof SecError || err instanceof ValidationError) throw new Error(err.message);
+    logError('sec', err);
+    throw new Error('No se pudieron procesar los datos de la SEC.');
+  });
+}
+
+function registerSecIpc(): void {
+  handle('sec:status', () => ({
+    contactSet: isValidContact(settings.secContact),
+    requestsMade: sec.requestsMade,
+    lastError: sec.lastError,
+    ...((s) => ({ cacheEntries: s.entries, cacheBytes: s.bytes }))(store.cacheStats('sec')),
+  }));
+  handle('sec:searchTicker', (a: { query: string }) =>
+    secGuard(async () => searchTickers(parseTickerFile((await sec.tickers()).data), a.query, 8)),
+  );
+  handle('sec:link', (a: { companyId: number; cik: number }) =>
+    secGuard(async () => {
+      const info = parseSubmissions((await sec.submissions(a.cik)).data);
+      if (!info) throw new ValidationError('Respuesta de la SEC no reconocida.');
+      const c = research.linkSec(a.companyId, info);
+      refreshCompanies();
+      return c;
+    }),
+  );
+  handle('sec:sync', (a: { companyId: number; force?: boolean }) =>
+    secGuard(async () => {
+      const company = companiesCache.find((c) => c.id === a.companyId);
+      if (!company?.cik) throw new ValidationError('Vincula primero la empresa con su registro en la SEC.');
+      const facts = await sec.companyFacts(company.cik, a.force);
+      const subs = await sec.submissions(company.cik, a.force);
+      const info = parseSubmissions(subs.data);
+      if (info) research.saveFilings(company.id, info);
+      const raw = facts.data as CompanyFacts;
+      if (!raw || typeof raw !== 'object' || !('facts' in raw)) throw new ValidationError('Respuesta de la SEC no reconocida.');
+      const norm = normalizeCompanyFacts(raw, 10);
+      research.saveSecFacts(company.id, company.cik, norm, facts.fetchedAt);
+      notesChanged(company.id);
+      return {
+        facts: norm.facts.length,
+        periods: [...new Set(norm.facts.map((f) => f.period))],
+        missing: norm.missing,
+        restated: norm.facts.filter((f) => f.restatedFrom).length,
+        taxonomy: norm.taxonomy,
+        entityName: norm.entityName,
+        fromCache: facts.fromCache,
+        stale: facts.stale,
+        fetchedAt: facts.fetchedAt,
+      };
+    }),
+  );
+  handle('sec:facts', (a: { companyId: number }) => research.listFacts(a.companyId));
+  handle('sec:filings', (a: { companyId: number }) => research.listFilings(a.companyId));
+  handle('sec:clearCache', () => store.cacheClear('sec'));
 }

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Flag, Info } from 'lucide-react';
-import { errorMessage, ib, showToast, useCompanies, useNotesRevision } from '../lib/ib';
+import { errorMessage, ib, showToast, useCompanies } from '../lib/ib';
+import { useCompanyFigures } from '../lib/figures';
 import { TickerChip } from '../components/research';
-import { buildFigureTable, formatMoney, formatMultiple, formatPct, periodSortKey, type Figure, type MetricId, type Scale } from '../../shared/finance';
+import { buildFigureTable, formatMoney, formatMultiple, formatPct, periodSortKey, type MetricId } from '../../shared/finance';
 import { dcf, DEFAULT_SCENARIOS, multiples, sectorWarning, sensitivity, type DcfScenario, type SectorKind, type ValuationInputs } from '../../shared/valuation';
 
 type FieldKey = keyof ValuationInputs;
@@ -33,7 +34,6 @@ interface Provenance {
 
 export function ValuationPage({ companyId }: { companyId: number | null }) {
   const companies = useCompanies();
-  const rev = useNotesRevision();
   const [selected, setSelected] = useState<number | null>(companyId);
   const company = companies.find((c) => c.id === selected) ?? null;
   const [raw, setRaw] = useState<Record<FieldKey, string>>(() => Object.fromEntries(FIELDS.map((f) => [f.key, ''])) as Record<FieldKey, string>);
@@ -42,23 +42,7 @@ export function ValuationPage({ companyId }: { companyId: number | null }) {
   const [currency, setCurrency] = useState('USD');
   const [years, setYears] = useState(5);
   const [scenarios, setScenarios] = useState<DcfScenario[]>(DEFAULT_SCENARIOS);
-  const [figures, setFigures] = useState<Figure[]>([]);
-
-  useEffect(() => {
-    if (!selected) return setFigures([]);
-    let alive = true;
-    void ib.invoke('notes:list', { companyId: selected }).then((notes) => {
-      if (!alive) return;
-      setFigures(
-        notes
-          .filter((n) => n.kind === 'figure' && n.metric && n.period && n.value !== null && n.scale)
-          .map((n) => ({ metric: n.metric as MetricId, period: n.period!, value: n.value!, scale: n.scale as Scale, currency: n.currency, origin: n.origin ?? 'user', sourceUrl: n.sourceUrl, sourceTitle: n.sourceTitle })),
-      );
-    });
-    return () => {
-      alive = false;
-    };
-  }, [selected, rev]);
+  const { figures } = useCompanyFigures(selected);
 
   useEffect(() => {
     if (company) setSector(company.sectorKind);
@@ -87,7 +71,7 @@ export function ValuationPage({ companyId }: { companyId: number | null }) {
       nextRaw[f.key] = String(f.unit === 'millions' ? +(v.value / 1e6).toFixed(4) : v.value);
       nextProv[f.key] = {
         kind: v.origin,
-        label: `${latestFy} · ${{ published: 'publicado', calculated: 'cálculo', user: 'tuyo', estimate: 'estimación' }[v.origin]}`,
+        label: `${latestFy} · ${v.provider === 'sec' ? 'SEC' : { published: 'publicado', calculated: 'cálculo', user: 'tuyo', estimate: 'estimación' }[v.origin]}`,
         title: v.origin === 'calculated' ? v.formula : (v.sources[0]?.url ?? undefined),
       };
       if (v.currency) setCurrency(v.currency);

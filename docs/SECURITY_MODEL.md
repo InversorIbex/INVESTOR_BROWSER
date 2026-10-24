@@ -33,7 +33,13 @@ El principio: **el contenido web es hostil**. Ninguna página puede alcanzar Nod
     - Importación JSON: tamaño máximo, esquema Zod campo a campo, transacción atómica y URLs peligrosas descartadas.
     - El distintivo «Fuente oficial» exige HTTPS y dominio exacto o subdominio real (test con `sec.gov.evil.com` y `evilsec.gov`).
     - No se hace ninguna petición de red nueva: los enlaces a EDGAR son solo enlaces.
-14. **User-Agent:** se elimina el token `Electron/x.y` para que las webs traten la app como Chrome. No afecta a la seguridad.
+14. **Datos oficiales (SEC):**
+    - Las peticiones salen solo del proceso main, por una sesión de red propia (`sec-data`) sin cookies ni permisos.
+    - No hay ninguna petición hasta que el usuario declara su contacto (requisito de la SEC); el contacto solo se envía a `sec.gov`/`data.sec.gov`.
+    - Redirecciones aceptadas únicamente dentro de `sec.gov`. Tamaño máximo 80 MB, tiempo máximo 30 s, JSON validado y analizado de forma defensiva.
+    - Las URLs de documentos se construyen con CIK y número de registro validados; nombres de archivo con `/` o `..` se descartan.
+    - `IB_SEC_BASE_URL` (solo pruebas) se ignora salvo que sea `http://127.0.0.1:<puerto>`.
+15. **User-Agent:** se elimina el token `Electron/x.y` para que las webs traten la app como Chrome. No afecta a la seguridad.
 
 ## Excepciones documentadas
 

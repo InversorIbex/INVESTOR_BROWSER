@@ -12,7 +12,8 @@ Sin salir del navegador, sin suscripciones y sin que tus datos salgan de tu equi
 [![Licencia Apache-2.0](https://img.shields.io/badge/licencia-Apache--2.0-5b8cff?style=flat-square)](LICENSE)
 [![Electron 44](https://img.shields.io/badge/Electron-44%20·%20Chromium%20152-47848f?style=flat-square&logo=electron&logoColor=white)](docs/ARCHITECTURE.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](tsconfig.json)
-[![Pruebas](https://img.shields.io/badge/pruebas-79%20unit%20·%206%20E2E-3fb68b?style=flat-square)](#-calidad-y-pruebas)
+[![Pruebas](https://img.shields.io/badge/pruebas-103%20unit%20·%207%20E2E-3fb68b?style=flat-square)](#-calidad-y-pruebas)
+[![SEC EDGAR](https://img.shields.io/badge/datos-SEC%20EDGAR%20oficial-0b3d91?style=flat-square)](docs/DATA_SOURCES.md)
 [![Coste de datos](https://img.shields.io/badge/coste%20de%20datos-0%20€-3fb68b?style=flat-square)](docs/DATA_SOURCES.md)
 [![Telemetría](https://img.shields.io/badge/telemetría-ninguna-e3a13b?style=flat-square)](PRIVACY.md)
 [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078d4?style=flat-square&logo=windows&logoColor=white)](#-instalación)
@@ -68,12 +69,24 @@ Múltiplos, DCF en tres escenarios y sensibilidad, con tus cifras y **el origen 
 - Cinco tipos de entrada: **fragmento**, **cifra**, **nota**, **conclusión** y **pregunta** (con «marcar como resuelta»).
 - **«Guardar como cifra…»** interpreta números copiados de informes (`$245,122 million`, `1.234,5 M€`, `(12,345)`, `€2,3 mil millones`) y **avisa si el separador es ambiguo**. Nunca guarda sin tu confirmación.
 
+### 🏛️ Datos oficiales de la SEC (gratis, sin clave)
+- **Vincula la empresa con su registro en la SEC** por ticker o nombre. Funciona con emisores de EE. UU. y con extranjeros que presentan 20-F o 40-F, en su moneda (US-GAAP e IFRS).
+- **Importa diez años de cifras XBRL** de los informes anuales: ingresos, márgenes, beneficio, flujo de caja operativo, CAPEX, caja, deuda, acciones, BPA y dividendo.
+- **Cada cifra dice de dónde sale**: documento (10-K, 20-F…), fecha de presentación, concepto XBRL, periodo exacto y enlace a EDGAR.
+- **⚠ Re-expresiones a la vista**: si un informe posterior cambió la cifra de un año, lo ves junto al valor original.
+- **Presentaciones recientes** (anuales, trimestrales, 8-K, insiders, juntas) a un clic, abiertas en pestañas de la empresa.
+- Respeta las normas de la SEC:
+  - te identificas con tu contacto, y sin él no hay ninguna petición;
+  - máximo 8 consultas por segundo;
+  - caché local, que también da una copia fechada si no hay conexión.
+
 ### 📊 Dossier de empresa
 - **Cifras clave por periodo** en una sola unidad («millones de USD»), con un punto que indica su origen:
   `🟢 publicado` · `🔵 cálculo propio` · `⚪ introducido por ti` · `🟠 estimación`.
 - **FCL** (FCO − CAPEX) y **deuda neta** derivados automáticamente, **con la fórmula y las cifras de origen** al pasar el ratón.
 - Márgenes bruto, operativo, neto y de FCL, y **conversión en caja** (FCO / beneficio neto).
 - **Los huecos se quedan en «—», nunca en cero.** Un dato publicado siempre gana a un cálculo propio.
+- **Combina tus cifras con las oficiales de la SEC**: tus anotaciones del mismo periodo tienen prioridad.
 - **Precio manual** con fecha y fuente. Si no lo introduces: *«Cotización no disponible»*. Sin datos retrasados disfrazados de tiempo real.
 - **Tesis de inversión** con autoguardado, **preguntas pendientes**, **fuentes consultadas** y enlaces directos a **10-K, 10-Q, 8-K, Form 4 y 20-F** en SEC EDGAR.
 
@@ -109,6 +122,9 @@ Pestañas verticales (estilo Arc) u horizontales, fijadas, reordenables y reabri
 <tr>
 <td width="50%"><img src="docs/screenshots/guardar-cita.png" alt="Guardar una cita con su fuente"><br><sub><b>Guardar en investigación</b> · la cita conserva URL, título y fecha</sub></td>
 <td width="50%"><img src="docs/screenshots/valoracion.png" alt="Laboratorio de valoración"><br><sub><b>Valoración</b> · cada dato muestra de dónde viene</sub></td>
+</tr>
+<tr>
+<td colspan="2"><img src="docs/screenshots/sec-edgar.png" alt="Cifras oficiales de la SEC con procedencia y re-expresión"><br><sub><b>SEC EDGAR</b> · cifras XBRL con documento, concepto y periodo; ⚠ marca una cifra re-expresada en un informe posterior (empresa sintética de prueba)</sub></td>
 </tr>
 <tr>
 <td width="50%"><img src="docs/screenshots/paleta.png" alt="Paleta de comandos"><br><sub><b>Paleta de comandos</b> · <code>Ctrl+K</code> para todo</sub></td>
@@ -254,18 +270,21 @@ src/
 
 ## ✅ Calidad y pruebas
 
-- **79 pruebas unitarias**, entre ellas:
+- **103 pruebas unitarias**, entre ellas:
   - interpretación de cifras en formatos de EE. UU. y Europa;
   - DCF contrastado con un cálculo a mano;
   - rechazo de dominios impostores;
   - exportar e importar ida y vuelta;
-  - regresiones de ajustes y empresas.
-- **6 pruebas E2E con Electron real** contra un servidor local, sin depender de Internet:
+  - regresiones de ajustes y empresas;
+  - normalización XBRL con las trampas reales de la SEC (`fy` del documento, re-expresiones, trimestres, IFRS en DKK);
+  - cliente SEC: sin petición sin contacto, ritmo, caché, errores.
+- **7 pruebas E2E con Electron real** contra servidores locales, sin depender de Internet:
   - navegación, pestañas, atrás/adelante, búsqueda y errores;
   - persistencia tras reiniciar y descargas;
   - paleta de comandos;
   - flujo de investigación completo;
-  - contenido hostil que debe mostrarse como texto.
+  - contenido hostil que debe mostrarse como texto;
+  - SEC simulada: consentimiento, User-Agent, ritmo medido en el servidor, cifras con procedencia y modo sin conexión.
 - **CI en Linux y Windows**: typecheck, pruebas, E2E y generación del instalador.
 
 ---
@@ -275,7 +294,7 @@ src/
 - [x] **Fase 1** · Navegador funcional, seguro y persistente
 - [x] **Fase 2** · Espacios de investigación, cuaderno con procedencia, dossier, exportación
 - [x] **Fase 4 (parcial)** · Laboratorio de valoración: múltiplos, DCF, sensibilidad
-- [ ] **Fase 3** · Cifras automáticas desde **SEC EDGAR** (XBRL), con caché, límite de 10 peticiones/s y procedencia por cifra
+- [x] **Fase 3** · Cifras oficiales desde **SEC EDGAR** (XBRL): procedencia por cifra, re-expresiones, presentaciones, caché y acceso justo
 - [ ] **Fase 4** · Quality Compounder Analyzer · Financial Forensics · Cross-Tab Research · Insider Tracker (Form 4) · Crash Replay
 - [ ] **Fase 5** · Investment Copilot **opcional**: sin IA por defecto, con consentimiento antes de enviar nada
 - [ ] **Fase 6** · Firma de código, actualizaciones firmadas, pruebas en Windows 10 y 11 reales
@@ -285,6 +304,12 @@ Criterios de aceptación y riesgos: [docs/ROADMAP.md](docs/ROADMAP.md) · Cambio
 ---
 
 ## ❓ Preguntas frecuentes
+
+<details>
+<summary><b>¿De dónde salen las cifras automáticas?</b></summary>
+
+De la API oficial y gratuita de la SEC (XBRL de los informes 10-K, 20-F y 40-F). Solo se consulta cuando tú lo pides y cada cifra enlaza al documento original. Para empresas que no presentan ante la SEC (p. ej. muchas europeas sin ADR), usa el cuaderno: selecciona la cifra en su informe anual y guárdala con su fuente.
+</details>
 
 <details>
 <summary><b>¿Muestra cotizaciones en tiempo real?</b></summary>
@@ -333,6 +358,7 @@ Para proponer una nueva fuente de datos usa la [plantilla específica](.github/I
 - **Research workspaces per company:** tabs are grouped by ticker and can be saved and restored.
 - **Provenance-aware notebook:** right-click any selection on a web page or PDF to save it with its URL, title and access date. Figures copied from reports are parsed with ambiguity warnings.
 - **Company dossier:** shows each figure's origin (published / own calculation / user / estimate) and derives FCF and net debt with visible formulas. Gaps are never filled with zeros.
+- **Official SEC EDGAR data:** ten years of XBRL annual figures (US-GAAP and IFRS) with document, concept and period for every number, restatement flags, and the filings list. It follows the SEC's fair-access rules: declared contact, at most 8 requests per second, local cache.
 - **Valuation lab:** multiples with reasons when they don't apply, sector adjustments, a 3-scenario DCF and a sensitivity grid.
 - **Trust signals:** official-source badges for regulator domains (HTTPS and exact host only) and an IR badge on a company's investor-relations site.
 

@@ -2,6 +2,9 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { Kbd, Toggle } from '../components/ui';
 import { ib, runCommand, showToast, updateSettings, useSettings } from '../lib/ib';
+import { SecContactForm } from '../components/SecPanel';
+import type { SecStatus } from '../../shared/types';
+import { formatBytes } from '../components/ui';
 import { SEARCH_ENGINES, NEW_TAB_URL, normalizeInput } from '../../shared/url';
 import { COMMANDS, COMMAND_IDS } from '../../shared/commands';
 import type { AppInfo, SitePermission } from '../../shared/types';
@@ -121,6 +124,8 @@ export function SettingsPage() {
           <Toggle checked={s.askDownloadLocation} onChange={(v) => set({ askDownloadLocation: v })} label="Preguntar ubicación de descarga" />
         </Row>
       </Section>
+
+      <DataSourcesSection />
 
       <Section title="Privacidad y datos">
         <p className="section-note">
@@ -278,5 +283,49 @@ function Segmented<T extends string>({ value, options, onChange, testId }: { val
         </button>
       ))}
     </div>
+  );
+}
+
+function DataSourcesSection() {
+  const settings = useSettings();
+  const [status, setStatus] = useState<SecStatus | null>(null);
+  const load = () => void ib.invoke('sec:status').then(setStatus);
+  useEffect(load, [settings.secContact]);
+  return (
+    <Section title="Fuentes de datos">
+      <div className="subsection">
+        <h3>SEC EDGAR (EE. UU.) · gratuita, sin clave</h3>
+        <p className="section-note">
+          Cifras XBRL de informes 10-K, 20-F y 40-F, y lista de presentaciones. Máximo 8 consultas por segundo (la SEC permite 10), con caché local: informes 12 h, presentaciones 6 h, lista de tickers 7 días.
+          Solo se consulta cuando tú lo pides desde el dossier de una empresa.
+        </p>
+        <SecContactForm compact={false} onSaved={load} />
+        {status && (
+          <dl className="about">
+            <dt>Estado</dt>
+            <dd>{status.contactSet ? 'Configurada' : 'Sin contacto: no se hará ninguna consulta'}</dd>
+            <dt>Consultas en esta sesión</dt>
+            <dd>{status.requestsMade}</dd>
+            <dt>Caché</dt>
+            <dd>
+              {status.cacheEntries} respuesta(s) · {formatBytes(status.cacheBytes)}{' '}
+              <button className="link-btn small" onClick={() => void ib.invoke('sec:clearCache').then(load)}>
+                Vaciar
+              </button>
+            </dd>
+            {status.lastError && (
+              <>
+                <dt>Último error</dt>
+                <dd className="warn-text">{status.lastError}</dd>
+              </>
+            )}
+          </dl>
+        )}
+      </div>
+      <div className="subsection">
+        <h3>Próximamente</h3>
+        <p className="section-note">FRED (macro, requiere tu clave gratuita), Treasury Fiscal Data y Eurostat. Ver docs/DATA_SOURCES.md.</p>
+      </div>
+    </Section>
   );
 }

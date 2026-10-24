@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 describe('companies', () => {
-  it('migrates to v2', () => expect(store.schemaVersion).toBe(2));
+  it('migrates to the latest version', () => expect(store.schemaVersion).toBe(3));
 
   it('creates, normalises and distinguishes homonyms by exchange', () => {
     const a = repo.saveCompany({ name: 'Novo Nordisk', ticker: 'nvo', exchange: 'nyse' });
@@ -132,4 +132,32 @@ describe('notebook', () => {
     expect(c.irUrl).toBeNull();
     expect(repo.listNotes(c.id)[0]!.sourceUrl).toBeNull();
   });
+});
+
+describe('official SEC data', () => {
+  it('links, stores normalised facts with provenance and replaces them on refresh', async () => {
+    const { normalizeCompanyFacts, parseSubmissions } = await import('../../src/shared/xbrl');
+    const { companyFacts, submissions } = await import('../fixtures/sec');
+    const c = repo.saveCompany({ name: 'Mi nombre propio', ticker: 'FXTC', sector: 'Software a mi manera' });
+    const linked = repo.linkSec(c.id, parseSubmissions(submissions)!);
+    expect(linked).toMatchObject({ cik: '1999999', secName: 'FIXTURE TEST CORP', fiscalYearEnd: '0630', name: 'Mi nombre propio', exchange: 'NASDAQ', sector: 'Software a mi manera' });
+    expect(repo.listFilings(c.id)[0]).toMatchObject({ form: '10-Q', filingDate: '2025-10-28' });
+
+    const norm = normalizeCompanyFacts(companyFacts as never);
+    repo.saveSecFacts(c.id, '1999999', norm, 123);
+    const facts = repo.listFacts(c.id);
+    expect(facts.length).toBe(norm.facts.length);
+    const rev24 = facts.find((f) => f.metric === 'revenue' && f.period === 'FY2024')!;
+    expect(rev24).toMatchObject({ value: 1010e6, restatedValue: 1000e6, form: '10-K', sourceUrl: 'https://www.sec.gov/Archives/edgar/data/1999999/000199999925000015/' });
+    expect(repo.getCompany(c.id)).toMatchObject({ secSyncedAt: 123, secTaxonomy: 'us-gaap' });
+
+    repo.saveSecFacts(c.id, '1999999', { ...norm, facts: norm.facts.slice(0, 2) }, 456);
+    expect(repo.listFacts(c.id)).toHaveLength(2); // replaced, not appended
+    // Notebook entries are never touched by a sync
+    repo.addNote({ companyId: c.id, kind: 'note', body: 'mía' });
+    repo.saveSecFacts(c.id, '1999999', norm, 789);
+    expect(repo.listNotes(c.id)).toHaveLength(1);
+  });
+
+  it('migrates to v3', () => expect(store.schemaVersion).toBe(3));
 });

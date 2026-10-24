@@ -1,5 +1,12 @@
 // Bundles the main process and the preload with esbuild (CommonJS, Electron externals).
-import { build, context } from 'esbuild';
+let esbuild;
+try {
+  esbuild = await import('esbuild');
+} catch {
+  console.error('\n  Faltan las dependencias del proyecto.\n  Ejecuta primero:  npm install\n  (y espera a que termine sin errores; descarga Electron, ~100 MB)\n');
+  process.exit(1);
+}
+const { build, context } = esbuild;
 
 const watch = process.argv.includes('--watch');
 const common = {

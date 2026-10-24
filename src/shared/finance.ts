@@ -73,6 +73,11 @@ export interface Figure {
   sourceUrl?: string | null;
   sourceTitle?: string | null;
   noteId?: number;
+  /** Extra provenance shown in tooltips (e.g. XBRL concept, filing date). */
+  detail?: string | null;
+  /** True when a later filing changed the value for this period. */
+  restated?: boolean;
+  provider?: 'sec' | null;
 }
 
 // ---------------------------------------------------------------- periods
@@ -180,6 +185,9 @@ export interface ResolvedValue {
   /** Human-readable formula for calculated values. */
   formula?: string;
   sources: { url?: string | null; title?: string | null }[];
+  detail?: string | null;
+  restated?: boolean;
+  provider?: 'sec' | null;
 }
 
 export type FigureTable = Map<string, Map<MetricId, ResolvedValue>>; // period → metric → value
@@ -198,6 +206,9 @@ export function buildFigureTable(figures: Figure[]): FigureTable {
       currency: f.currency,
       origin: f.origin,
       sources: [{ url: f.sourceUrl, title: f.sourceTitle }],
+      detail: f.detail ?? null,
+      restated: !!f.restated,
+      provider: f.provider ?? null,
     });
     table.set(f.period, row);
   }

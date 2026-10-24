@@ -37,7 +37,9 @@ CREATE TABLE notes (
   body TEXT NOT NULL, quote TEXT, created_at INTEGER, updated_at INTEGER);
 ```
 
-## v3 — Fase 3 (diseño)
+## v3 — Fase 3 (implementado; ver `src/main/db.ts`)
+
+Implementado como `financial_facts` (cifras de proveedores oficiales con concepto, documento, fecha de presentación, periodo exacto, URL y valor original si hubo re-expresión), `filings` (presentaciones) y `http_cache` (respuestas por proveedor). Las cifras de la SEC nunca se mezclan con las notas del usuario: se combinan solo al mostrarlas. Diseño original:
 
 ```sql
 CREATE TABLE financial_facts (

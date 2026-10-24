@@ -124,6 +124,52 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX notes_company ON notes(company_id, created_at DESC);
   `,
+  /* v3 — Phase 3: official data (SEC EDGAR) */ `
+  ALTER TABLE companies ADD COLUMN sec_name TEXT;
+  ALTER TABLE companies ADD COLUMN fiscal_year_end TEXT;
+  ALTER TABLE companies ADD COLUMN sec_synced_at INTEGER;
+  ALTER TABLE companies ADD COLUMN sec_taxonomy TEXT;
+  CREATE TABLE http_cache (
+    provider   TEXT    NOT NULL,
+    key        TEXT    NOT NULL,
+    body       TEXT    NOT NULL,
+    fetched_at INTEGER NOT NULL,
+    PRIMARY KEY (provider, key)
+  );
+  CREATE TABLE financial_facts (
+    id             INTEGER PRIMARY KEY,
+    company_id     INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    provider       TEXT    NOT NULL,
+    metric         TEXT    NOT NULL,
+    period         TEXT    NOT NULL,
+    period_start   TEXT,
+    period_end     TEXT    NOT NULL,
+    value          REAL    NOT NULL,
+    unit           TEXT    NOT NULL,
+    currency       TEXT,
+    concept        TEXT    NOT NULL,
+    accn           TEXT    NOT NULL,
+    form           TEXT    NOT NULL,
+    filed          TEXT    NOT NULL,
+    derived        INTEGER NOT NULL DEFAULT 0,
+    restated_value REAL,
+    restated_accn  TEXT,
+    restated_filed TEXT,
+    source_url     TEXT    NOT NULL,
+    fetched_at     INTEGER NOT NULL,
+    UNIQUE (company_id, provider, metric, period)
+  );
+  CREATE TABLE filings (
+    company_id  INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    accn        TEXT    NOT NULL,
+    form        TEXT    NOT NULL,
+    filing_date TEXT    NOT NULL,
+    report_date TEXT,
+    description TEXT,
+    url         TEXT    NOT NULL,
+    PRIMARY KEY (company_id, accn)
+  );
+  `,
 ];
 
 export class Store {
@@ -349,6 +395,35 @@ export class Store {
     this.db
       .prepare("UPDATE downloads SET status = 'interrupted' WHERE status IN ('progressing','paused')")
       .run();
+  }
+
+  // ---------- provider HTTP cache ----------
+  cacheGet(provider: string, key: string): { body: string; fetchedAt: number } | null {
+    const row = this.db.prepare('SELECT body, fetched_at AS fetchedAt FROM http_cache WHERE provider = ? AND key = ?').get(provider, key) as
+      | { body: string; fetchedAt: number }
+      | undefined;
+    return row ? { ...row } : null;
+  }
+
+  cacheSet(provider: string, key: string, body: string, fetchedAt: number): void {
+    this.db
+      .prepare(
+        `INSERT INTO http_cache(provider, key, body, fetched_at) VALUES(?, ?, ?, ?)
+         ON CONFLICT(provider, key) DO UPDATE SET body = excluded.body, fetched_at = excluded.fetched_at`,
+      )
+      .run(provider, key, body, fetchedAt);
+  }
+
+  cacheStats(provider: string): { entries: number; bytes: number } {
+    const r = this.db.prepare('SELECT COUNT(*) AS entries, COALESCE(SUM(LENGTH(body)), 0) AS bytes FROM http_cache WHERE provider = ?').get(provider) as {
+      entries: number;
+      bytes: number;
+    };
+    return { entries: Number(r.entries), bytes: Number(r.bytes) };
+  }
+
+  cacheClear(provider: string): void {
+    this.db.prepare('DELETE FROM http_cache WHERE provider = ?').run(provider);
   }
 
   // ---------- site permissions ----------

@@ -15,10 +15,12 @@ import {
   X,
 } from 'lucide-react';
 import { errorMessage, ib, openSaveDialog, showToast, useBrowser, useCompany, useNotesRevision, useSettings } from '../lib/ib';
+import { useCompanyFigures } from '../lib/figures';
+import { FilingsCard, SecCard } from '../components/SecPanel';
 import { CompanyForm, KIND_ICON, TickerChip, relativeDate } from '../components/research';
 import { EmptyState } from '../components/ui';
 import { NOTE_KIND_LABEL, type Note, type NoteKind, type Source } from '../../shared/types';
-import { buildFigureTable, formatMoney, formatPct, METRICS, periodSortKey, ratiosFor, type Figure, type MetricId, type Scale } from '../../shared/finance';
+import { buildFigureTable, formatMoney, formatPct, METRICS, periodSortKey, ratiosFor } from '../../shared/finance';
 import { edgarLinks, searchLinks } from '../../shared/sources';
 import { displayUrl, searchUrl } from '../../shared/url';
 import { marketCap } from '../../shared/valuation';
@@ -31,39 +33,21 @@ export function CompanyPage({ id }: { id: number }) {
   const settings = useSettings();
   const rev = useNotesRevision();
   const browser = useBrowser();
-  const [notes, setNotes] = useState<Note[]>([]);
+  const { figures, notes } = useCompanyFigures(id);
   const [sources, setSources] = useState<Source[]>([]);
   const [editing, setEditing] = useState(false);
   const [filter, setFilter] = useState<NoteKind | 'all'>('all');
 
   useEffect(() => {
     let alive = true;
-    void ib.invoke('notes:list', { companyId: id }).then((n) => alive && setNotes(n));
     void ib.invoke('sources:list', { companyId: id }).then((s) => alive && setSources(s));
     return () => {
       alive = false;
     };
   }, [id, rev]);
 
-  const figures: Figure[] = useMemo(
-    () =>
-      notes
-        .filter((n) => n.kind === 'figure' && n.metric && n.period && n.value !== null && n.scale)
-        .map((n) => ({
-          metric: n.metric as MetricId,
-          period: n.period!,
-          value: n.value!,
-          scale: n.scale as Scale,
-          currency: n.currency,
-          origin: n.origin ?? 'user',
-          sourceUrl: n.sourceUrl,
-          sourceTitle: n.sourceTitle,
-          noteId: n.id,
-        })),
-    [notes],
-  );
   const table = useMemo(() => buildFigureTable(figures), [figures]);
-  const periods = useMemo(() => [...table.keys()].sort((a, b) => periodSortKey(a) - periodSortKey(b)).slice(-6), [table]);
+  const periods = useMemo(() => [...table.keys()].sort((a, b) => periodSortKey(a) - periodSortKey(b)).slice(-8), [table]);
 
   if (!company) return <EmptyState icon={<BookOpen size={28} />} title="Esta empresa ya no existe" />;
 
@@ -157,7 +141,7 @@ export function CompanyPage({ id }: { id: number }) {
             </div>
             {periods.length === 0 ? (
               <p className="muted small">
-                Selecciona una cifra en un informe (clic derecho → <em>Guardar como cifra</em>) o añádela a mano. Cada cifra conserva su fuente y su periodo. No se rellenan huecos con ceros.
+                Importa las cifras oficiales desde la SEC (panel lateral) o selecciona una cifra en un informe (clic derecho → <em>Guardar como cifra</em>). Cada cifra conserva su fuente y su periodo. No se rellenan huecos con ceros.
               </p>
             ) : (
               <FiguresTable table={table} periods={periods} />
@@ -193,6 +177,8 @@ export function CompanyPage({ id }: { id: number }) {
         </div>
 
         <aside className="dossier-side">
+          <SecCard company={company} />
+          <FilingsCard company={company} />
           <section className="card">
             <h2>
               <Landmark size={14} /> Fuentes primarias
@@ -299,12 +285,17 @@ function FiguresTable({ table, periods }: { table: ReturnType<typeof buildFigure
               <th>{m.short}</th>
               {periods.map((p) => {
                 const v = table.get(p)?.get(m.id);
-                if (!v) return <td key={p} className="empty-cell">—</td>;
+                if (!v)
+                  return (
+                    <td key={p} className="empty-cell" data-metric={m.id} data-period={p} title="Sin dato: no se rellena con cero">
+                      —
+                    </td>
+                  );
                 const tip =
                   v.origin === 'calculated'
-                    ? `${v.formula}\nCon cifras de: ${v.sources.map((s) => s.title || s.url || 'nota tuya').join(', ')}`
+                    ? `${v.formula}\nCon cifras de: ${[...new Set(v.sources.map((s) => s.title || s.url || 'nota tuya'))].join(', ')}`
                     : v.sources[0]?.url
-                      ? `Fuente: ${v.sources[0].title || ''} ${v.sources[0].url}`
+                      ? `Fuente: ${v.sources[0].title || ''}\n${v.sources[0].url}${v.detail ? '\n' + v.detail : ''}`
                       : 'Introducido por ti';
                 const display =
                   m.kind === 'count'
@@ -315,7 +306,15 @@ function FiguresTable({ table, periods }: { table: ReturnType<typeof buildFigure
                         ? fmtM(v.value)
                         : formatMoney(v.value, v.currency);
                 return (
-                  <td key={p} className={`mono cell-${v.origin} ${v.value < 0 ? 'neg-num' : ''}`} title={tip} data-metric={m.id} data-period={p}>
+                  <td
+                    key={p}
+                    className={`mono cell-${v.origin} ${v.value < 0 ? 'neg-num' : ''} ${v.restated ? 'is-restated' : ''}`}
+                    title={tip}
+                    data-metric={m.id}
+                    data-period={p}
+                    data-provider={v.provider ?? 'user'}
+                  >
+                    {v.restated && <span className="restated-mark" aria-label="Re-expresado">⚠</span>}
                     {display}
                     <span className={`dot dot-${v.origin}`} aria-label={v.origin} />
                   </td>
@@ -356,6 +355,9 @@ function FiguresTable({ table, periods }: { table: ReturnType<typeof buildFigure
         </span>
         <span>
           <span className="dot dot-estimate" /> Estimación
+        </span>
+        <span>
+          <span className="restated-mark">⚠</span> Re-expresado en un informe posterior
         </span>
       </div>
     </div>
