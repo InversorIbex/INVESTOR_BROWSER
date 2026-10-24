@@ -129,7 +129,8 @@ describe('Store', () => {
 
 describe('download file names', () => {
   it('never overwrites and strips path tricks', () => {
-    const existing = new Set(['/d/report.pdf', '/d/report (1).pdf']);
+    // Built with path.join so the test is valid on Windows (\) and POSIX (/).
+    const existing = new Set([path.join('/d', 'report.pdf'), path.join('/d', 'report (1).pdf')]);
     expect(uniquePath('/d', 'report.pdf', (p) => existing.has(p))).toBe(path.join('/d', 'report (2).pdf'));
     expect(sanitizeFilename('../../etc/passwd')).toBe('_.._etc_passwd');
     expect(sanitizeFilename('a:b*c?.pdf')).toBe('a_b_c_.pdf');
