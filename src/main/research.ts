@@ -4,7 +4,8 @@
  */
 import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
-import type { Company, FilingRow, FinancialFact, Note, NoteKind, Source } from '../shared/types';
+import type { Company, FilingRow, FinancialFact, InsiderRow, Note, NoteKind, Source } from '../shared/types';
+import { ownerRole, type Form4 } from '../shared/form4';
 import { filingIndexUrl, type NormalizeResult, type SubmissionsInfo } from '../shared/xbrl';
 import { CompanyInputSchema, NoteInputSchema, type CompanyInput, type NoteInput } from '../shared/ipc';
 import { isSafeWebUrl } from '../shared/url';
@@ -253,15 +254,15 @@ export class ResearchRepo {
 
   saveFilings(companyId: number, info: SubmissionsInfo): void {
     const ins = this.db.prepare(
-      `INSERT INTO filings(company_id, accn, form, filing_date, report_date, description, url) VALUES(?,?,?,?,?,?,?)
+      `INSERT INTO filings(company_id, accn, form, filing_date, report_date, description, url, primary_document) VALUES(?,?,?,?,?,?,?,?)
        ON CONFLICT(company_id, accn) DO UPDATE SET form=excluded.form, filing_date=excluded.filing_date,
-         report_date=excluded.report_date, description=excluded.description, url=excluded.url`,
+         report_date=excluded.report_date, description=excluded.description, url=excluded.url, primary_document=excluded.primary_document`,
     );
     this.db.exec('BEGIN');
     try {
       for (const f of info.filings) {
         if (!f.url.startsWith('https://www.sec.gov/Archives/edgar/data/')) continue;
-        ins.run(companyId, f.accn, f.form, f.filingDate, f.reportDate, f.description, f.url);
+        ins.run(companyId, f.accn, f.form, f.filingDate, f.reportDate, f.description, f.url, f.primaryDocument);
       }
       this.db.exec('COMMIT');
     } catch (err) {
@@ -334,6 +335,82 @@ export class ResearchRepo {
         )
         .all(companyId) as unknown as FinancialFact[]
     ).map((f) => ({ ...f, derived: !!f.derived }));
+  }
+
+  // ---------------- insiders (Form 4) ----------------
+  /** Form 4/4-A filings not yet processed, newest first. */
+  pendingForm4(companyId: number, limit: number): { accn: string; filingDate: string; primaryDocument: string | null; url: string }[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT f.accn, f.filing_date AS filingDate, f.primary_document AS primaryDocument, f.url FROM filings f
+           WHERE f.company_id = ? AND f.form IN ('4', '4/A')
+             AND NOT EXISTS (SELECT 1 FROM insider_filings i WHERE i.company_id = f.company_id AND i.accn = f.accn)
+           ORDER BY f.filing_date DESC LIMIT ?`,
+        )
+        .all(companyId, limit) as unknown as { accn: string; filingDate: string; primaryDocument: string | null; url: string }[]
+    ).map((r) => ({ ...r }));
+  }
+
+  countForm4(companyId: number): { available: number; pending: number } {
+    const r = this.db
+      .prepare(
+        `SELECT COUNT(*) AS available,
+                SUM(CASE WHEN NOT EXISTS (SELECT 1 FROM insider_filings i WHERE i.company_id = f.company_id AND i.accn = f.accn) THEN 1 ELSE 0 END) AS pending
+         FROM filings f WHERE f.company_id = ? AND f.form IN ('4', '4/A')`,
+      )
+      .get(companyId) as { available: number; pending: number | null };
+    return { available: Number(r.available), pending: Number(r.pending ?? 0) };
+  }
+
+  /** Store one parsed Form 4 atomically. Transactions must belong to this issuer. */
+  saveForm4(companyId: number, accn: string, filed: string, url: string, form: Form4): number {
+    const company = this.getCompany(companyId);
+    if (!company) throw new ValidationError('La empresa no existe.');
+    if (form.issuerCik && company.cik && Number(form.issuerCik) !== Number(company.cik))
+      throw new ValidationError('El Form 4 corresponde a otro emisor.');
+    const owner = form.owners[0];
+    const role = form.owners.map((o) => ownerRole(o)).filter((r) => r !== '—').join(' / ') || '—';
+    const ownerName = form.owners.map((o) => o.name).join(' / ').slice(0, 300) || 'Desconocido';
+    const ins = this.db.prepare(
+      `INSERT OR REPLACE INTO insider_transactions(company_id, accn, seq, filed, owner_name, owner_cik, role, table_kind, security, tx_date, code,
+         category, shares, price, acquired_disposed, shares_after, ownership, plan_10b5_1, plan_source, footnotes, url)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    );
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare('DELETE FROM insider_transactions WHERE company_id = ? AND accn = ?').run(companyId, accn);
+      for (const t of form.transactions) {
+        const notes = t.footnotes.map((id) => `${id}: ${form.footnotes[id] ?? ''}`).join('\n').slice(0, 4000);
+        ins.run(companyId, accn, t.seq, filed, ownerName, owner?.cik ?? null, role.slice(0, 200), t.table, t.security, t.date, t.code, t.category,
+          t.shares, t.price, t.acquiredDisposed, t.sharesAfter, t.ownership, Number(t.plan10b51), t.planSource, notes, url);
+      }
+      this.markForm4(companyId, accn, 'parsed', null);
+      this.db.exec('COMMIT');
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
+    }
+    return form.transactions.length;
+  }
+
+  markForm4(companyId: number, accn: string, status: 'parsed' | 'error', error: string | null): void {
+    this.db
+      .prepare('INSERT OR REPLACE INTO insider_filings(company_id, accn, status, error, parsed_at) VALUES(?,?,?,?,?)')
+      .run(companyId, accn, status, error?.slice(0, 300) ?? null, Date.now());
+  }
+
+  listInsiders(companyId: number, limit = 500): InsiderRow[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT accn, seq, filed, owner_name AS ownerName, owner_cik AS ownerCik, role, table_kind AS "table", security, tx_date AS date, code,
+                  category, shares, price, acquired_disposed AS acquiredDisposed, shares_after AS sharesAfter, ownership,
+                  plan_10b5_1 AS plan10b51, plan_source AS planSource, footnotes, url
+           FROM insider_transactions WHERE company_id = ? ORDER BY tx_date DESC, accn DESC, seq LIMIT ?`,
+        )
+        .all(companyId, limit) as unknown as InsiderRow[]
+    ).map((r) => ({ ...r, plan10b51: !!r.plan10b51 }));
   }
 
   // ---------------- sources ----------------

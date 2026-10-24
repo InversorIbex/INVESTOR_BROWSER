@@ -51,9 +51,20 @@ Múltiplos, DCF con escenarios y sensibilidad, adaptación sectorial; DCF contra
 
 Pendiente para fases posteriores: cifras trimestrales y TTM, segmentos, notas de deuda (arrendamientos), Form 4 estructurado (Insider Tracker).
 
-## Fase 4 — Herramientas
+## Fase 4 — Herramientas ✅ (v0.4.0, salvo Crash Replay)
 
-Quality Compounder Analyzer, Financial Forensics, Valuation Lab, Cross-Tab Research, Insider Tracker (Form 4), Crash Replay. Todas con métricas descomponibles y limitaciones explícitas.
+| Herramienta | Estado | Verificación |
+| --- | --- | --- |
+| Quality Compounder Analyzer | ✅ 7 criterios descomponibles, calidad separada de valoración | Unit (valores a mano: CAGR, ROIC con capital medio) + E2E |
+| Financial Forensics | ✅ 10 señales con métrica, periodo, motivo y limitación; lista de lo no detectable | Unit (casos positivos, negativos y sin datos) + E2E |
+| Insider Tracker (Form 4) | ✅ Códigos de operación, 10b5-1 (casilla y nota), derivados, resumen por periodo | Unit (estructura de un Form 4 real) + E2E con archivo EDGAR simulado |
+| Cross-Tab Research → «Comparar empresas» | ✅ Con datos con procedencia, avisos de periodos y monedas distintos | E2E |
+| Valuation Lab | ✅ (v0.2.0) | — |
+| Crash Replay | ⏸️ Pendiente | Requiere cotizaciones históricas con licencia gratuita que permita su uso. No se simula. |
+
+Decisión de diseño: «Cross-Tab Research» no extrae el contenido de las pestañas (el encargo pide no suponer que una página contiene datos estructurados). Compara las cifras con procedencia de las empresas vinculadas a las pestañas abiertas.
+
+Pendiente de verificar en un equipo con acceso a sec.gov: lectura de Form 4 reales de 3 emisores (incluido uno con varios titulares en el mismo formulario).
 
 ## Fase 5 — Investment Copilot
 
@@ -76,4 +87,6 @@ Firma de código, actualizaciones firmadas, fuses de Electron, pruebas en Window
 | Ventanas emergentes de inicio de sesión que dependen de `window.opener` | Bajo | Se permiten como ventanas sandbox; bloqueables en Ajustes |
 | Atajos de teclado en distribuciones donde `Ctrl+\` requiere AltGr (teclado español) | Bajo | Alternativa `F11` |
 | Enlaces de EDGAR por ticker | Medio | Generados con el formato documentado de `browse-edgar`; **no verificados en vivo** desde el entorno de desarrollo (sin acceso a sec.gov). Si se indica el CIK se usa el CIK. |
+| Umbrales de calidad y señales forenses | Medio | Son reglas explícitas y visibles, no verdades; documentadas en `src/shared/analysis.ts` y modificables |
+| Form 4 con varios titulares | Bajo | Se guardan todos los nombres y roles juntos; la cantidad es la del formulario |
 | Interpretación de cifras copiadas | Medio | Siempre es una sugerencia editable; separadores ambiguos se marcan; nunca se guarda sin confirmación del usuario |

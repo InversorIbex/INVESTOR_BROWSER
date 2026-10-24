@@ -109,6 +109,42 @@ export const CONCEPT_MAP: Partial<Record<MetricId, ConceptRule[]>> = {
     { taxonomy: 'us-gaap', kind: 'duration', unit: 'perShare', concepts: ['EarningsPerShareDiluted'] },
     { taxonomy: 'ifrs-full', kind: 'duration', unit: 'perShare', concepts: ['DilutedEarningsLossPerShare'] },
   ],
+  receivables: [
+    { taxonomy: 'us-gaap', kind: 'instant', unit: 'currency', concepts: ['AccountsReceivableNetCurrent', 'ReceivablesNetCurrent'] },
+    { taxonomy: 'ifrs-full', kind: 'instant', unit: 'currency', concepts: ['TradeAndOtherCurrentReceivables', 'CurrentTradeReceivables'] },
+  ],
+  inventory: [
+    { taxonomy: 'us-gaap', kind: 'instant', unit: 'currency', concepts: ['InventoryNet'] },
+    { taxonomy: 'ifrs-full', kind: 'instant', unit: 'currency', concepts: ['Inventories'] },
+  ],
+  total_assets: [
+    { taxonomy: 'us-gaap', kind: 'instant', unit: 'currency', concepts: ['Assets'] },
+    { taxonomy: 'ifrs-full', kind: 'instant', unit: 'currency', concepts: ['Assets'] },
+  ],
+  equity: [
+    { taxonomy: 'us-gaap', kind: 'instant', unit: 'currency', concepts: ['StockholdersEquity', 'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'] },
+    { taxonomy: 'ifrs-full', kind: 'instant', unit: 'currency', concepts: ['EquityAttributableToOwnersOfParent', 'Equity'] },
+  ],
+  sbc: [
+    { taxonomy: 'us-gaap', kind: 'duration', unit: 'currency', concepts: ['ShareBasedCompensation', 'AllocatedShareBasedCompensationExpense'] },
+    { taxonomy: 'ifrs-full', kind: 'duration', unit: 'currency', concepts: ['AdjustmentsForSharebasedPayments'] },
+  ],
+  income_tax: [
+    { taxonomy: 'us-gaap', kind: 'duration', unit: 'currency', concepts: ['IncomeTaxExpenseBenefit'] },
+    { taxonomy: 'ifrs-full', kind: 'duration', unit: 'currency', concepts: ['IncomeTaxExpenseContinuingOperations'] },
+  ],
+  pretax_income: [
+    {
+      taxonomy: 'us-gaap',
+      kind: 'duration',
+      unit: 'currency',
+      concepts: [
+        'IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest',
+        'IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments',
+      ],
+    },
+    { taxonomy: 'ifrs-full', kind: 'duration', unit: 'currency', concepts: ['ProfitLossBeforeTax'] },
+  ],
   dividend_per_share: [
     { taxonomy: 'us-gaap', kind: 'duration', unit: 'perShare', concepts: ['CommonStockDividendsPerShareDeclared', 'CommonStockDividendsPerShareCashPaid'] },
     { taxonomy: 'ifrs-full', kind: 'duration', unit: 'perShare', concepts: ['DividendsRecognisedAsDistributionsToOwnersPerShare'] },
@@ -151,8 +187,9 @@ export function filingIndexUrl(cik: number | string, accn: string): string {
 }
 
 export function filingDocumentUrl(cik: number | string, accn: string, primaryDocument: string): string {
-  // Primary document names are plain file names; anything else is rejected.
-  if (!/^[\w.\-]{1,200}$/.test(primaryDocument)) return filingIndexUrl(cik, accn);
+  // Plain file names, or the SEC's XSL rendering of ownership forms ("xslF345X05/doc4.xml").
+  // Anything else (e.g. "../") falls back to the filing index.
+  if (!/^(xslF345X\d{2}\/)?[\w.\-]{1,200}$/.test(primaryDocument) || primaryDocument.includes('..')) return filingIndexUrl(cik, accn);
   return filingIndexUrl(cik, accn) + primaryDocument;
 }
 

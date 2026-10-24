@@ -8,6 +8,8 @@ import { COMMAND_IDS, type CommandId } from './commands';
 import { SettingsPatchSchema, NOTE_KINDS, SECTOR_KINDS } from './types';
 import { METRIC_IDS, SCALES, type Scale } from './finance';
 import type {
+  InsiderRow,
+  InsiderSyncResult,
   FilingRow,
   FinancialFact,
   SecStatus,
@@ -148,6 +150,8 @@ export const RequestSchemas = {
   'sec:facts': z.object({ companyId: PosInt }).strict(),
   'sec:filings': z.object({ companyId: PosInt }).strict(),
   'sec:clearCache': z.undefined(),
+  'sec:insidersSync': z.object({ companyId: PosInt, limit: z.number().int().min(1).max(100).optional() }).strict(),
+  'sec:insiders': z.object({ companyId: PosInt }).strict(),
 } as const;
 
 export type RequestChannel = keyof typeof RequestSchemas;
@@ -209,6 +213,8 @@ export interface ResponseMap {
   'sec:facts': FinancialFact[];
   'sec:filings': FilingRow[];
   'sec:clearCache': void;
+  'sec:insidersSync': InsiderSyncResult;
+  'sec:insiders': InsiderRow[];
 }
 
 export interface EventMap {

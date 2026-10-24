@@ -107,6 +107,29 @@ export class SecClient {
     return this.getJson(`facts:${id}`, `${this.base.data}/api/xbrl/companyfacts/CIK${id}.json`, TTL.facts, force);
   }
 
+  /**
+   * A document inside a filing (e.g. a Form 4 XML). Filings are immutable once
+   * accepted, so documents are cached for a year.
+   */
+  async archiveText(cik: number | string, accn: string, file: string): Promise<FetchResult<string>> {
+    if (!/^\d{10}-\d{2}-\d{6}$/.test(accn) || !/^[\w.\-]{1,120}$/.test(file) || file.includes('..')) throw new SecError('bad-data', 'Documento no válido.');
+    const c = String(Number(padCik(cik)));
+    const url = `${this.base.www}/Archives/edgar/data/${c}/${accn.replace(/-/g, '')}/${file}`;
+    const key = `doc:${accn}:${file}`;
+    const now = (this.o.now ?? Date.now)();
+    const cached = this.o.cache.get(key);
+    if (cached) return { data: cached.body, fromCache: true, stale: false, fetchedAt: cached.fetchedAt };
+    try {
+      const body = await this.request(url);
+      this.o.cache.set(key, body, now);
+      this.lastError = null;
+      return { data: body, fromCache: false, stale: false, fetchedAt: now };
+    } catch (err) {
+      this.lastError = err instanceof Error ? err.message : String(err);
+      throw err;
+    }
+  }
+
   private async getJson(key: string, url: string, ttl: number, force: boolean): Promise<FetchResult<unknown>> {
     const now = (this.o.now ?? Date.now)();
     const cached = this.o.cache.get(key);
@@ -147,7 +170,7 @@ export class SecClient {
       const timer = setTimeout(() => ctrl.abort(), this.o.timeoutMs ?? 30_000);
       let res: HttpResponse;
       try {
-        res = await this.o.fetch(url, { headers: { 'User-Agent': ua, Accept: 'application/json' }, signal: ctrl.signal });
+        res = await this.o.fetch(url, { headers: { 'User-Agent': ua, Accept: 'application/json, application/xml;q=0.9, */*;q=0.5' }, signal: ctrl.signal });
       } catch {
         throw new SecError('network', 'No se pudo conectar con la SEC. Comprueba tu conexión.');
       } finally {

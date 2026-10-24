@@ -39,6 +39,26 @@ export function noteToFigure(n: Note): Figure | null {
   };
 }
 
+/** Figures for several companies at once (comparison view). */
+export function useManyCompanyFigures(ids: number[]): Map<number, Figure[]> {
+  const rev = useNotesRevision();
+  const [data, setData] = useState<Map<number, Figure[]>>(new Map());
+  const key = ids.join(',');
+  useEffect(() => {
+    let alive = true;
+    void Promise.all(
+      ids.map(async (id) => {
+        const [notes, facts] = await Promise.all([ib.invoke('notes:list', { companyId: id }), ib.invoke('sec:facts', { companyId: id })]);
+        return [id, [...facts.map(secFactToFigure), ...notes.map(noteToFigure).filter((f): f is Figure => !!f)]] as [number, Figure[]];
+      }),
+    ).then((entries) => alive && setData(new Map(entries)));
+    return () => {
+      alive = false;
+    };
+  }, [key, rev]); // eslint-disable-line react-hooks/exhaustive-deps
+  return data;
+}
+
 /**
  * All figures of a company: official SEC data first, then your notebook figures,
  * which win when both exist for the same metric and period (you saved them on purpose).

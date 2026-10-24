@@ -17,6 +17,7 @@ import {
 import { errorMessage, ib, openSaveDialog, showToast, useBrowser, useCompany, useNotesRevision, useSettings } from '../lib/ib';
 import { useCompanyFigures } from '../lib/figures';
 import { FilingsCard, SecCard } from '../components/SecPanel';
+import { ForensicsView, InsidersView, QualityView } from '../components/Analysis';
 import { CompanyForm, KIND_ICON, TickerChip, relativeDate } from '../components/research';
 import { EmptyState } from '../components/ui';
 import { NOTE_KIND_LABEL, type Note, type NoteKind, type Source } from '../../shared/types';
@@ -47,6 +48,8 @@ export function CompanyPage({ id }: { id: number }) {
   }, [id, rev]);
 
   const table = useMemo(() => buildFigureTable(figures), [figures]);
+  const restated = useMemo(() => figures.filter((f) => f.restated).map((f) => ({ period: f.period, metric: f.metric })), [figures]);
+  const [view, setView] = useState<'overview' | 'quality' | 'forensics' | 'insiders'>('overview');
   const periods = useMemo(() => [...table.keys()].sort((a, b) => periodSortKey(a) - periodSortKey(b)).slice(-8), [table]);
 
   if (!company) return <EmptyState icon={<BookOpen size={28} />} title="Esta empresa ya no existe" />;
@@ -129,8 +132,28 @@ export function CompanyPage({ id }: { id: number }) {
         </div>
       </section>
 
+      <nav className="dossier-tabs" role="tablist" data-testid="dossier-tabs">
+        {(
+          [
+            ['overview', 'Resumen'],
+            ['quality', 'Calidad'],
+            ['forensics', 'Forense'],
+            ['insiders', 'Insiders'],
+          ] as const
+        ).map(([v, label]) => (
+          <button key={v} role="tab" aria-selected={view === v} className={view === v ? 'is-on' : ''} onClick={() => setView(v)} data-view={v}>
+            {label}
+          </button>
+        ))}
+      </nav>
+
       <div className="dossier-grid">
         <div className="dossier-main">
+          {view === 'quality' && <QualityView company={company} table={table} />}
+          {view === 'forensics' && <ForensicsView table={table} restated={restated} />}
+          {view === 'insiders' && <InsidersView company={company} />}
+          {view === 'overview' && (
+          <>
           {/* Figures */}
           <section className="card">
             <div className="card-head">
@@ -174,6 +197,8 @@ export function CompanyPage({ id }: { id: number }) {
               </ul>
             )}
           </section>
+          </>
+          )}
         </div>
 
         <aside className="dossier-side">
@@ -254,7 +279,10 @@ export function CompanyPage({ id }: { id: number }) {
 }
 
 function FiguresTable({ table, periods }: { table: ReturnType<typeof buildFigureTable>; periods: string[] }) {
-  const metrics = METRICS.filter((m) => m.id !== 'other' && periods.some((p) => table.get(p)?.has(m.id)));
+  const [showDetail, setShowDetail] = useState(false);
+  const available = METRICS.filter((m) => m.id !== 'other' && periods.some((p) => table.get(p)?.has(m.id)));
+  const detailCount = available.filter((m) => m.group === 'detail').length;
+  const metrics = available.filter((m) => showDetail || m.group !== 'detail');
   // Investor convention: one unit for the whole table ("millions of USD") when possible.
   const moneyCurrencies = new Set<string>();
   for (const p of periods)
@@ -343,6 +371,11 @@ function FiguresTable({ table, periods }: { table: ReturnType<typeof buildFigure
           })}
         </tbody>
       </table>
+      {detailCount > 0 && (
+        <button className="link-btn small detail-toggle" onClick={() => setShowDetail((d) => !d)} data-testid="toggle-detail">
+          {showDetail ? 'Ocultar' : 'Ver'} balance y detalle ({detailCount} métricas)
+        </button>
+      )}
       <div className="legend">
         <span>
           <span className="dot dot-published" /> Publicado (con fuente)

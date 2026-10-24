@@ -11,6 +11,7 @@ import { DownloadManager } from './downloads';
 import { ResearchRepo, ValidationError } from './research';
 import { isValidContact, SecClient, SecError } from './sec';
 import { normalizeCompanyFacts, parseSubmissions, parseTickerFile, searchTickers, type CompanyFacts } from '../shared/xbrl';
+import { parseForm4, rawForm4File } from '../shared/form4';
 import { logError } from './log';
 import { BRAND } from '../shared/brand';
 import { COMMANDS, UI_COMMANDS, commandForInput, tabIndexForInput, type CommandId, type KeyInput } from '../shared/commands';
@@ -496,6 +497,9 @@ function runCommand(id: CommandId): void {
       openInternal(c ? `ib://valuation/${c}` : 'ib://valuation');
       break;
     }
+    case 'open.compare':
+      openInternal('ib://compare');
+      break;
     case 'research.export':
       void exportResearch(undefined, 'markdown');
       break;
@@ -997,4 +1001,43 @@ function registerSecIpc(): void {
   handle('sec:facts', (a: { companyId: number }) => research.listFacts(a.companyId));
   handle('sec:filings', (a: { companyId: number }) => research.listFilings(a.companyId));
   handle('sec:clearCache', () => store.cacheClear('sec'));
+  handle('sec:insiders', (a: { companyId: number }) => research.listInsiders(a.companyId));
+  handle('sec:insidersSync', (a: { companyId: number; limit?: number }) =>
+    secGuard(async () => {
+      const company = companiesCache.find((c) => c.id === a.companyId);
+      if (!company?.cik) throw new ValidationError('Vincula primero la empresa con su registro en la SEC.');
+      // Refresh the filings list so new Form 4s are known (cached for 6 h).
+      const info = parseSubmissions((await sec.submissions(company.cik)).data);
+      if (info) research.saveFilings(company.id, info);
+      let parsed = 0;
+      let transactions = 0;
+      let errors = 0;
+      for (const f of research.pendingForm4(company.id, a.limit ?? 30)) {
+        const file = rawForm4File(f.primaryDocument);
+        if (!file) {
+          research.markForm4(company.id, f.accn, 'error', 'Documento XML no identificado');
+          errors++;
+          continue;
+        }
+        let xml: string;
+        try {
+          xml = (await sec.archiveText(company.cik, f.accn, file)).data;
+        } catch (err) {
+          // Network or rate limit: stop here; what was parsed is kept and the rest stays pending.
+          if (parsed === 0 && errors === 0) throw err;
+          break;
+        }
+        try {
+          transactions += research.saveForm4(company.id, f.accn, f.filingDate, f.url, parseForm4(xml));
+          parsed++;
+        } catch (err) {
+          research.markForm4(company.id, f.accn, 'error', err instanceof Error ? err.message : 'No se pudo leer');
+          errors++;
+        }
+      }
+      const counts = research.countForm4(company.id);
+      send('notesChanged', { companyId: company.id });
+      return { parsed, transactions, errors, remaining: counts.pending, available: counts.available };
+    }),
+  );
 }

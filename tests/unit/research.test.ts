@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 describe('companies', () => {
-  it('migrates to the latest version', () => expect(store.schemaVersion).toBe(3));
+  it('migrates to the latest version', () => expect(store.schemaVersion).toBe(4));
 
   it('creates, normalises and distinguishes homonyms by exchange', () => {
     const a = repo.saveCompany({ name: 'Novo Nordisk', ticker: 'nvo', exchange: 'nyse' });
@@ -159,5 +159,38 @@ describe('official SEC data', () => {
     expect(repo.listNotes(c.id)).toHaveLength(1);
   });
 
-  it('migrates to v3', () => expect(store.schemaVersion).toBe(3));
+  it('migrates to v4', () => expect(store.schemaVersion).toBe(4));
+});
+
+describe('insider transactions', () => {
+  it('stores parsed Form 4s, tracks pending filings and rejects other issuers', async () => {
+    const { parseSubmissions } = await import('../../src/shared/xbrl');
+    const { parseForm4 } = await import('../../src/shared/form4');
+    const { submissions, form4PlanSale, form4DirectorBuy } = await import('../fixtures/sec');
+    const c = repo.saveCompany({ name: 'FXTC', ticker: 'FXTC' });
+    repo.linkSec(c.id, parseSubmissions(submissions)!);
+    expect(repo.countForm4(c.id)).toEqual({ available: 3, pending: 3 });
+    const pending = repo.pendingForm4(c.id, 10);
+    expect(pending.map((p) => p.accn)).toEqual(['0001999999-25-000022', '0001999999-25-000021', '0001999999-25-000018']);
+    expect(pending[2]!.primaryDocument).toBe('xslF345X05/wk-form4.xml');
+
+    expect(repo.saveForm4(c.id, '0001999999-25-000018', '2025-09-02', pending[2]!.url, parseForm4(form4PlanSale))).toBe(3);
+    repo.saveForm4(c.id, '0001999999-25-000021', '2025-10-16', pending[1]!.url, parseForm4(form4DirectorBuy));
+    repo.markForm4(c.id, '0001999999-25-000022', 'error', 'x');
+    expect(repo.countForm4(c.id)).toEqual({ available: 3, pending: 0 });
+
+    const rows = repo.listInsiders(c.id);
+    expect(rows[0]).toMatchObject({ ownerName: 'Roe Richard & Family Trust', role: 'Consejero', code: 'P', category: 'buy', date: '2025-10-14' });
+    const sale = rows.find((r) => r.code === 'S')!;
+    expect(sale).toMatchObject({ plan10b51: true, planSource: 'checkbox', role: 'Chief Executive Officer', price: 46 });
+    expect(sale.footnotes).toContain('10b5-1');
+
+    // Re-saving the same filing replaces, never duplicates
+    repo.saveForm4(c.id, '0001999999-25-000018', '2025-09-02', pending[2]!.url, parseForm4(form4PlanSale));
+    expect(repo.listInsiders(c.id)).toHaveLength(4);
+
+    const other = repo.saveCompany({ name: 'Other' });
+    store.db.prepare("UPDATE companies SET cik = '123' WHERE id = ?").run(other.id);
+    expect(() => repo.saveForm4(other.id, 'x', '2025-01-01', 'u', parseForm4(form4PlanSale))).toThrow(/otro emisor/);
+  });
 });

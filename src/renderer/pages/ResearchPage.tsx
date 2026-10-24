@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, Download, FolderOpen, Plus, Search, Upload, CircleHelp } from 'lucide-react';
+import { BookOpen, Calculator, Columns3, Download, FolderOpen, Microscope, Plus, Search, ShieldCheck, Upload, CircleHelp, History, Users } from 'lucide-react';
 import { ib, runCommand, useCompanies, useNotesRevision } from '../lib/ib';
 import { CompanyForm, KIND_ICON, TickerChip, relativeDate } from '../components/research';
 import { EmptyState } from '../components/ui';
@@ -57,6 +57,8 @@ export function ResearchPage() {
           />
         </section>
       )}
+
+      {!q.trim() && companies.length > 0 && <ToolsStrip />}
 
       {q.trim() ? (
         <section className="list-group">
@@ -124,5 +126,32 @@ export function ResearchPage() {
         </div>
       )}
     </div>
+  );
+}
+
+const TOOLS = [
+  { icon: ShieldCheck, title: 'Calidad', sub: 'Pestaña «Calidad» de cada dossier', cmd: null },
+  { icon: Microscope, title: 'Forense', sub: 'Pestaña «Forense» de cada dossier', cmd: null },
+  { icon: Users, title: 'Insiders', sub: 'Form 4 de la SEC, en cada dossier', cmd: null },
+  { icon: Calculator, title: 'Valoración', sub: 'Múltiplos y DCF', cmd: 'open.valuation' },
+  { icon: Columns3, title: 'Comparar', sub: 'Hasta 5 empresas', cmd: 'open.compare' },
+] as const;
+
+function ToolsStrip() {
+  return (
+    <section className="tools-strip" data-testid="tools-strip">
+      {TOOLS.map((t) => (
+        <button key={t.title} className="tool" disabled={!t.cmd} onClick={() => t.cmd && runCommand(t.cmd)} data-testid={`tool-${t.title}`}>
+          <t.icon size={15} />
+          <span className="tool-title">{t.title}</span>
+          <span className="tool-sub">{t.sub}</span>
+        </button>
+      ))}
+      <div className="tool pending" title="Pendiente: necesita cotizaciones históricas con una licencia gratuita que permita su uso. Ver docs/DATA_SOURCES.md.">
+        <History size={15} />
+        <span className="tool-title">Crash Replay</span>
+        <span className="tool-sub">Pendiente: requiere cotizaciones históricas con licencia</span>
+      </div>
+    </section>
   );
 }

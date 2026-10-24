@@ -24,6 +24,13 @@ export type MetricId =
   | 'diluted_shares'
   | 'dividend_per_share'
   | 'eps_diluted'
+  | 'receivables'
+  | 'inventory'
+  | 'total_assets'
+  | 'equity'
+  | 'sbc'
+  | 'income_tax'
+  | 'pretax_income'
   | 'other';
 
 export interface MetricDef {
@@ -33,6 +40,8 @@ export interface MetricDef {
   /** flow = per period (P&L / cash flow); stock = balance at period end; per_share. */
   kind: 'flow' | 'stock' | 'per_share' | 'count';
   hint?: string;
+  /** 'detail' metrics feed the analysis tools and are collapsed in the dossier. */
+  group?: 'core' | 'detail';
 }
 
 export const METRICS: readonly MetricDef[] = [
@@ -51,6 +60,13 @@ export const METRICS: readonly MetricDef[] = [
   { id: 'diluted_shares', label: 'Acciones diluidas', short: 'Acciones', kind: 'count' },
   { id: 'dividend_per_share', label: 'Dividendo por acción', short: 'DPA', kind: 'per_share' },
   { id: 'eps_diluted', label: 'BPA diluido', short: 'BPA', kind: 'per_share' },
+  { id: 'receivables', label: 'Cuentas por cobrar', short: 'Clientes', kind: 'stock', group: 'detail' },
+  { id: 'inventory', label: 'Inventarios', short: 'Inventario', kind: 'stock', group: 'detail' },
+  { id: 'total_assets', label: 'Activo total', short: 'Activo', kind: 'stock', group: 'detail' },
+  { id: 'equity', label: 'Patrimonio neto', short: 'Patrimonio', kind: 'stock', group: 'detail' },
+  { id: 'sbc', label: 'Remuneración en acciones (SBC)', short: 'SBC', kind: 'flow', group: 'detail' },
+  { id: 'income_tax', label: 'Impuesto sobre beneficios', short: 'Impuestos', kind: 'flow', group: 'detail' },
+  { id: 'pretax_income', label: 'Beneficio antes de impuestos', short: 'BAI', kind: 'flow', group: 'detail' },
   { id: 'other', label: 'Otra cifra', short: 'Otra', kind: 'flow' },
 ];
 export const METRIC_IDS = METRICS.map((m) => m.id) as [MetricId, ...MetricId[]];

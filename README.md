@@ -12,7 +12,7 @@ Sin salir del navegador, sin suscripciones y sin que tus datos salgan de tu equi
 [![Licencia Apache-2.0](https://img.shields.io/badge/licencia-Apache--2.0-5b8cff?style=flat-square)](LICENSE)
 [![Electron 44](https://img.shields.io/badge/Electron-44%20·%20Chromium%20152-47848f?style=flat-square&logo=electron&logoColor=white)](docs/ARCHITECTURE.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](tsconfig.json)
-[![Pruebas](https://img.shields.io/badge/pruebas-103%20unit%20·%207%20E2E-3fb68b?style=flat-square)](#-calidad-y-pruebas)
+[![Pruebas](https://img.shields.io/badge/pruebas-121%20unit%20·%208%20E2E-3fb68b?style=flat-square)](#-calidad-y-pruebas)
 [![SEC EDGAR](https://img.shields.io/badge/datos-SEC%20EDGAR%20oficial-0b3d91?style=flat-square)](docs/DATA_SOURCES.md)
 [![Coste de datos](https://img.shields.io/badge/coste%20de%20datos-0%20€-3fb68b?style=flat-square)](docs/DATA_SOURCES.md)
 [![Telemetría](https://img.shields.io/badge/telemetría-ninguna-e3a13b?style=flat-square)](PRIVACY.md)
@@ -80,6 +80,24 @@ Múltiplos, DCF en tres escenarios y sensibilidad, con tus cifras y **el origen 
   - máximo 8 consultas por segundo;
   - caché local, que también da una copia fechada si no hay conexión.
 
+### 🔬 Análisis que se explica solo
+- **Calidad del negocio**: siete criterios independientes (crecimiento, margen, conversión en caja, ROIC, deuda, dilución y estabilidad).
+  - Cada uno muestra **su regla, su fórmula y las cifras exactas** que usa.
+  - Nada de puntuaciones mágicas: «6 de 7 criterios fuertes» y los no evaluables aparte.
+  - La valoración va **separada**: un gran negocio puede estar caro.
+- **Forense contable**: diez señales que dicen **dónde leer con más atención**, por ejemplo:
+  - beneficio que sube mientras la caja baja;
+  - clientes que crecen más que las ventas;
+  - dilución, remuneración en acciones (SBC) elevada o cifras re-expresadas.
+
+  Cada señal explica por qué importa y sus limitaciones. Nunca habla de fraude.
+- **Insiders (Form 4)**: compras y ventas de directivos y consejeros leídas de la SEC.
+  - Separa lo **discrecional** de las ventas con **plan 10b5-1**, las concesiones y las retenciones fiscales.
+  - Porque no toda venta es una señal.
+- **Comparar empresas**: hasta cinco lado a lado.
+  - Avisa si los ejercicios, los cierres fiscales o las monedas no coinciden.
+  - Marca como «Pendiente» lo que no tiene fuente.
+
 ### 📊 Dossier de empresa
 - **Cifras clave por periodo** en una sola unidad («millones de USD»), con un punto que indica su origen:
   `🟢 publicado` · `🔵 cálculo propio` · `⚪ introducido por ti` · `🟠 estimación`.
@@ -125,6 +143,14 @@ Pestañas verticales (estilo Arc) u horizontales, fijadas, reordenables y reabri
 </tr>
 <tr>
 <td colspan="2"><img src="docs/screenshots/sec-edgar.png" alt="Cifras oficiales de la SEC con procedencia y re-expresión"><br><sub><b>SEC EDGAR</b> · cifras XBRL con documento, concepto y periodo; ⚠ marca una cifra re-expresada en un informe posterior (empresa sintética de prueba)</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/fase4-quality.png" alt="Calidad del negocio con criterios descomponibles"><br><sub><b>Calidad</b> · cada criterio con su regla, fórmula y datos</sub></td>
+<td width="50%"><img src="docs/screenshots/fase4-forensics-terminal.png" alt="Forense contable en tema Terminal"><br><sub><b>Forense</b> · señales con motivo y limitación (tema Terminal)</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/fase4-insiders.png" alt="Operaciones de insiders desde Form 4"><br><sub><b>Insiders</b> · discrecional frente a planes 10b5-1</sub></td>
+<td width="50%"><img src="docs/screenshots/fase4-compare.png" alt="Comparar empresas"><br><sub><b>Comparar</b> · con avisos de periodos y monedas distintos</sub></td>
 </tr>
 <tr>
 <td width="50%"><img src="docs/screenshots/paleta.png" alt="Paleta de comandos"><br><sub><b>Paleta de comandos</b> · <code>Ctrl+K</code> para todo</sub></td>
@@ -270,21 +296,24 @@ src/
 
 ## ✅ Calidad y pruebas
 
-- **103 pruebas unitarias**, entre ellas:
+- **121 pruebas unitarias**, entre ellas:
   - interpretación de cifras en formatos de EE. UU. y Europa;
   - DCF contrastado con un cálculo a mano;
   - rechazo de dominios impostores;
   - exportar e importar ida y vuelta;
   - regresiones de ajustes y empresas;
   - normalización XBRL con las trampas reales de la SEC (`fy` del documento, re-expresiones, trimestres, IFRS en DKK);
-  - cliente SEC: sin petición sin contacto, ritmo, caché, errores.
-- **7 pruebas E2E con Electron real** contra servidores locales, sin depender de Internet:
+  - cliente SEC: sin petición sin contacto, ritmo, caché, errores;
+  - análisis contrastado a mano (CAGR, ROIC con capital medio, ratio de Sloan) en casos fuertes, débiles y sin datos;
+  - Form 4 con la estructura de un formulario real, plan 10b5-1 por casilla y por nota, y XML hostil (XXE, «billion laughs»).
+- **8 pruebas E2E con Electron real** contra servidores locales, sin depender de Internet:
   - navegación, pestañas, atrás/adelante, búsqueda y errores;
   - persistencia tras reiniciar y descargas;
   - paleta de comandos;
   - flujo de investigación completo;
   - contenido hostil que debe mostrarse como texto;
-  - SEC simulada: consentimiento, User-Agent, ritmo medido en el servidor, cifras con procedencia y modo sin conexión.
+  - SEC simulada: consentimiento, User-Agent, ritmo medido en el servidor, cifras con procedencia y modo sin conexión;
+  - calidad, forense, insiders desde el archivo EDGAR simulado y comparación de empresas.
 - **CI en Linux y Windows**: typecheck, pruebas, E2E y generación del instalador.
 
 ---
@@ -295,7 +324,8 @@ src/
 - [x] **Fase 2** · Espacios de investigación, cuaderno con procedencia, dossier, exportación
 - [x] **Fase 4 (parcial)** · Laboratorio de valoración: múltiplos, DCF, sensibilidad
 - [x] **Fase 3** · Cifras oficiales desde **SEC EDGAR** (XBRL): procedencia por cifra, re-expresiones, presentaciones, caché y acceso justo
-- [ ] **Fase 4** · Quality Compounder Analyzer · Financial Forensics · Cross-Tab Research · Insider Tracker (Form 4) · Crash Replay
+- [x] **Fase 4** · Quality Compounder · Financial Forensics · Insider Tracker (Form 4) · Comparar empresas
+- [ ] **Crash Replay** · pendiente de una fuente de cotizaciones históricas con licencia gratuita
 - [ ] **Fase 5** · Investment Copilot **opcional**: sin IA por defecto, con consentimiento antes de enviar nada
 - [ ] **Fase 6** · Firma de código, actualizaciones firmadas, pruebas en Windows 10 y 11 reales
 
@@ -358,6 +388,11 @@ Para proponer una nueva fuente de datos usa la [plantilla específica](.github/I
 - **Research workspaces per company:** tabs are grouped by ticker and can be saved and restored.
 - **Provenance-aware notebook:** right-click any selection on a web page or PDF to save it with its URL, title and access date. Figures copied from reports are parsed with ambiguity warnings.
 - **Company dossier:** shows each figure's origin (published / own calculation / user / estimate) and derives FCF and net debt with visible formulas. Gaps are never filled with zeros.
+- **Analysis that explains itself:**
+  - quality criteria with rules, formulas and inputs, kept separate from valuation;
+  - ten forensic signals with their limitations;
+  - a Form 4 insider tracker that separates discretionary trades from 10b5-1 plans;
+  - side-by-side company comparison.
 - **Official SEC EDGAR data:** ten years of XBRL annual figures (US-GAAP and IFRS) with document, concept and period for every number, restatement flags, and the filings list. It follows the SEC's fair-access rules: declared contact, at most 8 requests per second, local cache.
 - **Valuation lab:** multiples with reasons when they don't apply, sector adjustments, a 3-scenario DCF and a sensitivity grid.
 - **Trust signals:** official-source badges for regulator domains (HTTPS and exact host only) and an IR badge on a company's investor-relations site.

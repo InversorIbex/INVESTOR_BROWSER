@@ -79,6 +79,20 @@ export const companyFacts = {
         label: 'Weighted Average Number of Shares Outstanding, Diluted',
         units: { shares: [dur(FY23, 152 * M, K23), dur(FY24, 151 * M, K24), dur(FY25, 150 * M, K25)] },
       },
+      // Receivables grow much faster than revenue in FY2025 (+40% vs +17%): a forensic signal.
+      AccountsReceivableNetCurrent: {
+        label: 'Accounts Receivable, after Allowance for Credit Loss, Current',
+        units: { USD: [inst('2023-06-30', 120 * M, K23), inst('2024-06-30', 150 * M, K24), inst('2025-06-30', 210 * M, K25)] },
+      },
+      InventoryNet: { label: 'Inventory, Net', units: { USD: [inst('2023-06-30', 50 * M, K23), inst('2024-06-30', 56 * M, K24), inst('2025-06-30', 64 * M, K25)] } },
+      Assets: { label: 'Assets', units: { USD: [inst('2023-06-30', 1500 * M, K23), inst('2024-06-30', 1650 * M, K24), inst('2025-06-30', 1800 * M, K25)] } },
+      StockholdersEquity: { label: "Stockholders' Equity", units: { USD: [inst('2023-06-30', 900 * M, K23), inst('2024-06-30', 950 * M, K24), inst('2025-06-30', 1000 * M, K25)] } },
+      ShareBasedCompensation: { label: 'Share-based Payment Arrangement, Noncash Expense', units: { USD: [dur(FY23, 30 * M, K23), dur(FY24, 40 * M, K24), dur(FY25, 55 * M, K25)] } },
+      IncomeTaxExpenseBenefit: { label: 'Income Tax Expense (Benefit)', units: { USD: [dur(FY23, 45 * M, K23), dur(FY24, 52 * M, K24), dur(FY25, 66 * M, K25)] } },
+      IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest: {
+        label: 'Income (Loss) from Continuing Operations before Income Taxes',
+        units: { USD: [dur(FY23, 225 * M, K23), dur(FY24, 257 * M, K24), dur(FY25, 328 * M, K25)] },
+      },
       EarningsPerShareDiluted: { label: 'Earnings Per Share, Diluted', units: { 'USD/shares': [dur(FY23, 1.18, K23), dur(FY24, 1.36, K24), dur(FY25, 1.75, K25)] } },
       CommonStockDividendsPerShareDeclared: { label: 'Common Stock, Dividends, Per Share, Declared', units: { 'USD/shares': [dur(FY24, 0.4, K24), dur(FY25, 0.48, K25)] } },
     },
@@ -87,6 +101,8 @@ export const companyFacts = {
 
 const recent = [
   { accessionNumber: Q1.accn, filingDate: Q1.filed, reportDate: '2025-09-30', form: '10-Q', primaryDocument: 'fxtc-20250930.htm', primaryDocDescription: '10-Q' },
+  { accessionNumber: '0001999999-25-000022', filingDate: '2025-10-20', reportDate: '2025-10-17', form: '4', primaryDocument: 'xslF345X05/doc4.xml', primaryDocDescription: 'FORM 4' },
+  { accessionNumber: '0001999999-25-000021', filingDate: '2025-10-16', reportDate: '2025-10-14', form: '4', primaryDocument: 'xslF345X05/form4-roe.xml', primaryDocDescription: 'FORM 4' },
   { accessionNumber: '0001999999-25-000018', filingDate: '2025-09-02', reportDate: '2025-08-29', form: '4', primaryDocument: 'xslF345X05/wk-form4.xml', primaryDocDescription: 'FORM 4' },
   { accessionNumber: '0001999999-25-000016', filingDate: '2025-08-05', reportDate: '2025-08-05', form: '8-K', primaryDocument: 'fxtc-8k.htm', primaryDocDescription: '8-K' },
   { accessionNumber: K25.accn, filingDate: K25.filed, reportDate: '2025-06-30', form: '10-K', primaryDocument: 'fxtc-20250630.htm', primaryDocDescription: '10-K' },
@@ -137,4 +153,83 @@ export const ifrsFacts = {
       CashAndCashEquivalents: { label: 'Cash and cash equivalents', units: { DKK: [{ end: '2024-12-31', val: 15_000 * M, ...F24 }] } },
     },
   },
+};
+
+// ---------------------------------------------------------------- Form 4 (synthetic, real element structure)
+const owner = (name: string, cik: string, rel: string) => `
+  <reportingOwner>
+    <reportingOwnerId><rptOwnerCik>${cik}</rptOwnerCik><rptOwnerName>${name}</rptOwnerName></reportingOwnerId>
+    <reportingOwnerAddress><rptOwnerStreet1>1 FIXTURE WAY</rptOwnerStreet1><rptOwnerCity>DOVER</rptOwnerCity><rptOwnerState>DE</rptOwnerState></reportingOwnerAddress>
+    <reportingOwnerRelationship>${rel}</reportingOwnerRelationship>
+  </reportingOwner>`;
+const ndt = (date: string, code: string, shares: number, price: number | null, ad: 'A' | 'D', after: number, fn = '') => `
+    <nonDerivativeTransaction>
+      <securityTitle><value>Common Stock</value></securityTitle>
+      <transactionDate><value>${date}</value></transactionDate>
+      <transactionCoding><transactionFormType>4</transactionFormType><transactionCode>${code}</transactionCode><equitySwapInvolved>0</equitySwapInvolved></transactionCoding>
+      <transactionAmounts>
+        <transactionShares><value>${shares}</value>${fn}</transactionShares>
+        <transactionPricePerShare>${price === null ? '<footnoteId id="F9"/>' : `<value>${price}</value>`}</transactionPricePerShare>
+        <transactionAcquiredDisposedCode><value>${ad}</value></transactionAcquiredDisposedCode>
+      </transactionAmounts>
+      <postTransactionAmounts><sharesOwnedFollowingTransaction><value>${after}</value></sharesOwnedFollowingTransaction></postTransactionAmounts>
+      <ownershipNature><directOrIndirectOwnership><value>D</value></directOrIndirectOwnership></ownershipNature>
+    </nonDerivativeTransaction>`;
+const doc = (period: string, owners: string, plan: string, rows: string, deriv: string, notes: string) => `<?xml version="1.0"?>
+<ownershipDocument>
+  <schemaVersion>X0508</schemaVersion>
+  <documentType>4</documentType>
+  <periodOfReport>${period}</periodOfReport>
+  <issuer><issuerCik>0001999999</issuerCik><issuerName>FIXTURE TEST CORP</issuerName><issuerTradingSymbol>FXTC</issuerTradingSymbol></issuer>
+  ${owners}
+  ${plan}
+  <nonDerivativeTable>${rows}
+  </nonDerivativeTable>
+  <derivativeTable>${deriv}</derivativeTable>
+  <footnotes>${notes}</footnotes>
+  <ownerSignature><signatureName>/s/ Attorney-in-fact</signatureName><signatureDate>${period}</signatureDate></ownerSignature>
+</ownershipDocument>`;
+
+/** CEO: RSU grant, shares withheld for taxes, sale under a 10b5-1 plan (checkbox). */
+export const form4PlanSale = doc(
+  '2025-08-29',
+  owner('Doe Jane', '0001900001', '<isOfficer>1</isOfficer><officerTitle>Chief Executive Officer</officerTitle>'),
+  '<aff10b5One>1</aff10b5One>',
+  ndt('2025-08-29', 'A', 5000, 0, 'A', 85000, '<footnoteId id="F1"/>') + ndt('2025-08-29', 'F', 1800, 45.1, 'D', 83200) + ndt('2025-08-30', 'S', 3000, 46, 'D', 80200, '<footnoteId id="F2"/>'),
+  '',
+  '<footnote id="F1">Restricted stock units vest ratably over 3 years.</footnote><footnote id="F2">Sale effected under a Rule 10b5-1 trading plan adopted on March 3, 2025.</footnote>',
+);
+
+/** Director: discretionary open-market purchase. Name contains an XML entity. */
+export const form4DirectorBuy = doc(
+  '2025-10-14',
+  owner('Roe Richard &amp; Family Trust', '0001900002', '<isDirector>1</isDirector>'),
+  '<aff10b5One>0</aff10b5One>',
+  ndt('2025-10-14', 'P', 2000, 44, 'A', 12000),
+  '',
+  '',
+);
+
+/** CFO (older style): 10b5-1 only in a footnote; option exercise in the derivative table. */
+export const form4FootnotePlan = doc(
+  '2025-10-17',
+  owner('Poe Alex', '0001900003', '<isOfficer>true</isOfficer><officerTitle>Chief Financial Officer</officerTitle>'),
+  '',
+  ndt('2025-10-17', 'M', 4000, 20, 'A', 30000) + ndt('2025-10-17', 'S', 1500, 47.5, 'D', 28500, '<footnoteId id="F1"/>'),
+  `<derivativeTransaction>
+      <securityTitle><value>Stock Option (right to buy)</value></securityTitle>
+      <conversionOrExercisePrice><value>20</value></conversionOrExercisePrice>
+      <transactionDate><value>2025-10-17</value></transactionDate>
+      <transactionCoding><transactionFormType>4</transactionFormType><transactionCode>M</transactionCode></transactionCoding>
+      <transactionAmounts><transactionShares><value>4000</value></transactionShares><transactionPricePerShare><value>0</value></transactionPricePerShare><transactionAcquiredDisposedCode><value>D</value></transactionAcquiredDisposedCode></transactionAmounts>
+      <postTransactionAmounts><sharesOwnedFollowingTransaction><value>16000</value></sharesOwnedFollowingTransaction></postTransactionAmounts>
+      <ownershipNature><directOrIndirectOwnership><value>D</value></directOrIndirectOwnership></ownershipNature>
+    </derivativeTransaction>`,
+  '<footnote id="F1">The sales reported were effected pursuant to a Rule 10b5-1 trading plan.</footnote>',
+);
+
+export const form4Files: Record<string, string> = {
+  '000199999925000018/wk-form4.xml': form4PlanSale,
+  '000199999925000021/form4-roe.xml': form4DirectorBuy,
+  '000199999925000022/doc4.xml': form4FootnotePlan,
 };

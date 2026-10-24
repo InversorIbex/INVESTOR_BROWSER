@@ -782,6 +782,7 @@ export function internalTitle(url: string): string {
     'ib://downloads': 'Descargas',
     'ib://settings': 'Ajustes',
     'ib://research': 'Investigación',
+    'ib://compare': 'Comparar empresas',
   };
   if (url.startsWith('ib://valuation')) return 'Valoración';
   return map[url] ?? 'Investor Browser';

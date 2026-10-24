@@ -2,6 +2,43 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [0.4.0] — 2026-10-24
+
+### Añadido — Fase 4: herramientas de análisis
+- **Quality Compounder Analyzer** (pestaña «Calidad» del dossier): siete criterios independientes (crecimiento, margen y tendencia, conversión en FCL, ROIC, endeudamiento, dilución, estabilidad). Cada uno muestra veredicto, valor, regla, fórmula, ejercicios y las cifras usadas con su origen. **Sin puntuación opaca**: «X de Y criterios fuertes» y los no evaluables se cuentan aparte. La valoración se muestra **separada** de la calidad.
+- **ROIC por ejercicio** con NOPAT, tipo impositivo efectivo y capital invertido medio. No se estima nada que falte.
+- **Financial Forensics** (pestaña «Forense»), con diez señales:
+  - beneficio que sube con caja que baja;
+  - conversión en caja baja de forma persistente;
+  - devengos (Sloan);
+  - cuentas por cobrar o inventarios que crecen más que las ventas;
+  - aumento de deuda;
+  - dilución;
+  - deterioro de márgenes;
+  - SBC elevado;
+  - cifras re-expresadas.
+
+  Cada señal indica la métrica, los periodos, por qué importa y sus limitaciones, y nunca habla de fraude. También enumera lo que XBRL no puede detectar (políticas contables, ajustes no recurrentes, opinión del auditor).
+- **Insider Tracker** (pestaña «Insiders»):
+  - lee los **Form 4** del archivo de EDGAR;
+  - distingue compras y ventas discrecionales, ventas con **plan 10b5-1** (por la casilla del formulario o por la nota al pie en formularios antiguos), concesiones, ejercicios, retenciones fiscales y derivados;
+  - resumen para 12 meses, 24 meses o todo lo cargado, con detalle por operación y enlace al formulario.
+- **Comparar empresas** (`ib://compare`, paleta «Comparar empresas»): hasta cinco empresas lado a lado con márgenes, crecimiento, ROIC, conversión, apalancamiento, dilución, calidad, señales forenses y rentabilidad de FCL.
+  - Avisa si los ejercicios, los cierres fiscales o las monedas no coinciden.
+  - Lo que no tiene procedencia aparece como «Pendiente».
+- Nuevas métricas XBRL (US-GAAP e IFRS): cuentas por cobrar, inventarios, activo total, patrimonio neto, SBC, impuesto sobre beneficios y beneficio antes de impuestos. En el dossier aparecen bajo «Ver balance y detalle».
+- **Crash Replay** aparece como **pendiente**: requiere cotizaciones históricas con una licencia gratuita que lo permita.
+
+### Seguridad
+- Lector XML propio y mínimo para los Form 4. No procesa DOCTYPE ni entidades propias, así que no hay expansión de entidades ni XXE. Tiene límites de tamaño, profundidad y nodos, y lo prueban documentos hostiles.
+- Los Form 4 se descargan con el mismo cliente SEC: contacto declarado, como máximo 8 peticiones por segundo y nombres de archivo validados. Se guardan en caché un año, porque los documentos presentados no cambian.
+- Un Form 4 de otro emisor se rechaza.
+- Los enlaces a la versión legible del Form 4 (`xslF345X05/…`) se aceptan solo con un patrón estricto.
+
+### Corregido
+- La comparación y el dossier podían mostrar un número distinto de señales forenses (no se pasaban las re-expresiones).
+- «0 señales» con datos insuficientes ahora es «Pendiente».
+
 ## [0.3.0] — 2026-10-23
 
 ### Añadido — Fase 3: datos oficiales de SEC EDGAR

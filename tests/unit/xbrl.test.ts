@@ -95,6 +95,8 @@ describe('SEC identifiers and documents', () => {
       'https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/aapl-20250927.htm',
     );
     expect(filingDocumentUrl(320193, '0000320193-25-000079', '../../evil')).toBe('https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/');
+    expect(filingDocumentUrl(320193, '0000320193-25-000079', 'xslF345X05/../x.xml')).toBe('https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/');
+    expect(filingDocumentUrl(320193, '0000320193-25-000079', 'other/x.xml')).toBe('https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/');
     expect(() => filingIndexUrl(1, 'x/../y')).toThrow();
   });
 
@@ -111,8 +113,8 @@ describe('SEC identifiers and documents', () => {
     const s = parseSubmissions(submissions)!;
     expect(s).toMatchObject({ cik: '0001999999', name: 'FIXTURE TEST CORP', tickers: ['FXTC'], exchanges: ['Nasdaq'], fiscalYearEnd: '0630' });
     expect(s.filings[0]).toMatchObject({ form: '10-Q', filingDate: '2025-10-28', url: 'https://www.sec.gov/Archives/edgar/data/1999999/000199999925000020/fxtc-20250930.htm' });
-    // Form 4 primary documents contain a slash (XSL rendering path): falls back to the index page.
-    expect(s.filings.find((x) => x.form === '4')!.url).toBe('https://www.sec.gov/Archives/edgar/data/1999999/000199999925000018/');
+    // Form 4: the SEC's human-readable XSL rendering is allowed by a strict pattern.
+    expect(s.filings.find((x) => x.accn === '0001999999-25-000018')!.url).toBe('https://www.sec.gov/Archives/edgar/data/1999999/000199999925000018/xslF345X05/wk-form4.xml');
     expect(parseSubmissions({})).toBeNull();
   });
 });

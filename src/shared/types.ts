@@ -275,6 +275,37 @@ export interface FinancialFact {
   fetchedAt: number;
 }
 
+export interface InsiderRow {
+  accn: string;
+  seq: number;
+  filed: string;
+  ownerName: string;
+  ownerCik: string | null;
+  role: string;
+  table: 'nonDerivative' | 'derivative';
+  security: string;
+  date: string;
+  code: string;
+  category: 'buy' | 'sell' | 'grant' | 'exercise' | 'tax' | 'gift' | 'disposition' | 'other';
+  shares: number | null;
+  price: number | null;
+  acquiredDisposed: 'A' | 'D' | null;
+  sharesAfter: number | null;
+  ownership: 'D' | 'I' | null;
+  plan10b51: boolean;
+  planSource: 'checkbox' | 'footnote' | null;
+  footnotes: string;
+  url: string;
+}
+
+export interface InsiderSyncResult {
+  parsed: number;
+  transactions: number;
+  errors: number;
+  remaining: number;
+  available: number;
+}
+
 export interface FilingRow {
   accn: string;
   form: string;

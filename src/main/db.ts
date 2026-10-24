@@ -170,6 +170,42 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (company_id, accn)
   );
   `,
+  /* v4 — Phase 4: insider transactions (Form 4) */ `
+  ALTER TABLE filings ADD COLUMN primary_document TEXT;
+  CREATE TABLE insider_filings (
+    company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    accn       TEXT    NOT NULL,
+    status     TEXT    NOT NULL CHECK (status IN ('parsed','error')),
+    error      TEXT,
+    parsed_at  INTEGER NOT NULL,
+    PRIMARY KEY (company_id, accn)
+  );
+  CREATE TABLE insider_transactions (
+    company_id        INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    accn              TEXT    NOT NULL,
+    seq               INTEGER NOT NULL,
+    filed             TEXT    NOT NULL,
+    owner_name        TEXT    NOT NULL,
+    owner_cik         TEXT,
+    role              TEXT    NOT NULL,
+    table_kind        TEXT    NOT NULL CHECK (table_kind IN ('nonDerivative','derivative')),
+    security          TEXT    NOT NULL,
+    tx_date           TEXT    NOT NULL,
+    code              TEXT    NOT NULL,
+    category          TEXT    NOT NULL,
+    shares            REAL,
+    price             REAL,
+    acquired_disposed TEXT,
+    shares_after      REAL,
+    ownership         TEXT,
+    plan_10b5_1       INTEGER NOT NULL DEFAULT 0,
+    plan_source       TEXT,
+    footnotes         TEXT    NOT NULL DEFAULT '',
+    url               TEXT    NOT NULL,
+    PRIMARY KEY (company_id, accn, seq)
+  );
+  CREATE INDEX insider_tx_date ON insider_transactions(company_id, tx_date DESC);
+  `,
 ];
 
 export class Store {

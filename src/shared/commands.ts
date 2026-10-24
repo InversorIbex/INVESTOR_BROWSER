@@ -38,6 +38,7 @@ export const COMMANDS = {
   'research.save': { title: 'Guardar selección en investigación', keys: ['Mod+Shift+S'], group: 'Investigación' },
   'open.research': { title: 'Empresas e investigación', keys: ['Mod+Shift+E'], group: 'Investigación' },
   'open.valuation': { title: 'Laboratorio de valoración', keys: [], group: 'Investigación' },
+  'open.compare': { title: 'Comparar empresas', keys: [], group: 'Investigación' },
   'research.export': { title: 'Exportar investigación (Markdown)', keys: [], group: 'Investigación' },
   'research.exportJson': { title: 'Exportar investigación (JSON, para copia)', keys: [], group: 'Investigación' },
   'research.import': { title: 'Importar investigación (JSON)', keys: [], group: 'Investigación' },

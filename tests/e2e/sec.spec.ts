@@ -1,42 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { createServer, type Server } from 'node:http';
 import { launch, newProfileDir, state, waitFor } from './helpers';
-import { companyFacts, companyTickers, FIXTURE_CIK_PADDED, submissions } from '../fixtures/sec';
-
-interface Hit {
-  path: string;
-  ua: string;
-  at: number;
-}
-
-/** Local stand-in for www.sec.gov + data.sec.gov serving responses in the real format. */
-function startMockSec(): Promise<{ server: Server; base: string; hits: Hit[] }> {
-  const hits: Hit[] = [];
-  const routes: Record<string, unknown> = {
-    '/files/company_tickers.json': companyTickers,
-    [`/submissions/CIK${FIXTURE_CIK_PADDED}.json`]: submissions,
-    [`/api/xbrl/companyfacts/CIK${FIXTURE_CIK_PADDED}.json`]: companyFacts,
-  };
-  const server = createServer((req, res) => {
-    const path = (req.url ?? '').split('?')[0]!;
-    hits.push({ path, ua: String(req.headers['user-agent'] ?? ''), at: Date.now() });
-    // The real SEC rejects requests without a declared contact.
-    if (!/@/.test(String(req.headers['user-agent'] ?? ''))) {
-      res.writeHead(403).end('Undeclared Automated Tool');
-      return;
-    }
-    const body = routes[path];
-    if (!body) {
-      res.writeHead(404).end();
-      return;
-    }
-    res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(body));
-  });
-  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => {
-    const a = server.address();
-    resolve({ server, base: `http://127.0.0.1:${typeof a === 'object' && a ? a.port : 0}`, hits });
-  }));
-}
+import { startMockSec } from './mockSec';
 
 test('Fase 3: vincular con la SEC, importar cifras XBRL con procedencia y trabajar sin conexión', async () => {
   const mock = await startMockSec();
@@ -66,7 +30,7 @@ test('Fase 3: vincular con la SEC, importar cifras XBRL con procedencia y trabaj
 
     // Fair access: declared User-Agent on every request, ≤ 10 requests/second.
     expect(mock.hits.length).toBeGreaterThanOrEqual(3);
-    for (const h of mock.hits) expect(h.ua).toBe('InvestorBrowser/0.3.0 Ana Perez ana@example.com');
+    for (const h of mock.hits) expect(h.ua).toBe('InvestorBrowser/0.4.0 Ana Perez ana@example.com');
     const gaps = mock.hits.slice(1).map((h, i) => h.at - mock.hits[i]!.at);
     expect(Math.min(...gaps)).toBeGreaterThanOrEqual(100);
 
