@@ -29,6 +29,8 @@ import type {
   Suggestion,
   EsefFilingRow,
   EsefSyncResult,
+  QuotesStatus,
+  FxRatesInfo,
 } from './types';
 
 const Id = z.string().min(1).max(64);
@@ -154,6 +156,12 @@ export const RequestSchemas = {
   'sec:clearCache': z.undefined(),
   'sec:insidersSync': z.object({ companyId: PosInt, limit: z.number().int().min(1).max(100).optional() }).strict(),
   'sec:insiders': z.object({ companyId: PosInt }).strict(),
+  'quotes:status': z.undefined(),
+  'quotes:setKey': z.object({ provider: z.enum(['finnhub', 'eodhd']), key: z.string().trim().min(8).max(128).regex(/^[A-Za-z0-9._\-]+$/) }).strict(),
+  'quotes:deleteKey': z.object({ provider: z.enum(['finnhub', 'eodhd']) }).strict(),
+  'quotes:refresh': z.object({ companyIds: z.array(PosInt).max(500).optional(), force: z.boolean().optional() }).strict(),
+  'quotes:setSymbol': z.object({ companyId: PosInt, symbol: z.string().trim().max(20).regex(/^[A-Za-z0-9][A-Za-z0-9.\-]*$/).nullable() }).strict(),
+  'fx:rates': z.object({ force: z.boolean().optional() }).strict().optional(),
   'esef:search': z.object({ query: z.string().trim().min(2).max(80) }).strict(),
   'esef:link': z.object({ companyId: PosInt, lei: z.string().regex(/^[A-Z0-9]{18}[0-9]{2}$/), name: z.string().max(200).optional() }).strict(),
   'esef:unlink': z.object({ companyId: PosInt }).strict(),
@@ -222,6 +230,12 @@ export interface ResponseMap {
   'sec:clearCache': void;
   'sec:insidersSync': InsiderSyncResult;
   'sec:insiders': InsiderRow[];
+  'quotes:status': QuotesStatus;
+  'quotes:setKey': { message: string; status: QuotesStatus };
+  'quotes:deleteKey': QuotesStatus;
+  'quotes:refresh': { updated: number; failed: { companyId: number; error: string }[]; eodhdLeft: number };
+  'quotes:setSymbol': void;
+  'fx:rates': FxRatesInfo | null;
   'esef:search': { lei: string; name: string }[];
   'esef:link': Company;
   'esef:unlink': void;

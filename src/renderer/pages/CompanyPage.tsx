@@ -10,6 +10,7 @@ import {
   Landmark,
   Pencil,
   Plus,
+  RefreshCw,
   Search,
   Trash2,
   X,
@@ -27,6 +28,8 @@ import { buildFigureTable, formatMoney, formatPct, METRICS, periodSortKey, ratio
 import { edgarLinks, searchLinks } from '../../shared/sources';
 import { displayUrl, searchUrl } from '../../shared/url';
 import { marketCap } from '../../shared/valuation';
+import { exchangeCurrency, formatAsOf, priceBadge, providerSymbol, PROVIDER_LABEL } from '../../shared/market';
+import type { Company, QuotesStatus } from '../../shared/types';
 
 const open = (url: string, e?: React.MouseEvent) =>
   e && (e.ctrlKey || e.metaKey || e.button === 1) ? void ib.invoke('tabs:create', { url, active: false }) : void ib.invoke('tabs:create', { url });
@@ -116,7 +119,7 @@ export function CompanyPage({ id }: { id: number }) {
 
       {/* KPI strip */}
       <section className="kpis">
-        <PriceCard companyId={id} price={company.price} currency={company.priceCurrency} asOf={company.priceAsOf} source={company.priceSource} />
+        <PriceCard key={`${company.id}:${company.priceFetchedAt ?? 0}`} company={company} />
         <div className="kpi">
           <div className="kpi-label">Capitalización</div>
           <div className="kpi-value mono">{mc !== null ? formatMoney(mc, company.priceCurrency) : '—'}</div>
@@ -414,21 +417,43 @@ function FiguresTable({ table, periods }: { table: ReturnType<typeof buildFigure
   );
 }
 
-function PriceCard(props: { companyId: number; price: number | null; currency: string | null; asOf: string | null; source: string | null }) {
+function PriceCard({ company }: { company: Company }) {
   const [edit, setEdit] = useState(false);
-  const [price, setPrice] = useState(props.price ? String(props.price) : '');
-  const [currency, setCurrency] = useState(props.currency ?? 'USD');
-  const [asOf, setAsOf] = useState(props.asOf ?? new Date().toISOString().slice(0, 10));
-  const [source, setSource] = useState(props.source ?? '');
+  const [price, setPrice] = useState(company.price ? String(company.price) : '');
+  const [currency, setCurrency] = useState(company.priceCurrency ?? exchangeCurrency(company.exchange, company.quoteSymbol)?.replace('GBX', 'GBP') ?? 'USD');
+  const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10));
+  const [source, setSource] = useState(company.priceKind === 'manual' ? (company.priceSource ?? '') : '');
+  const [symbol, setSymbol] = useState(company.quoteSymbol ?? '');
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<QuotesStatus | null>(null);
+  useEffect(() => {
+    void ib.invoke('quotes:status').then(setStatus);
+  }, [company.id]);
+  const hasKey = !!status && (status.finnhub.readable || status.eodhd.readable);
+  const auto = providerSymbol(company, 'finnhub') ?? providerSymbol(company, 'eodhd');
+
   const save = async () => {
     const v = Number(price.replace(',', '.'));
     try {
-      await ib.invoke('companies:setPrice', { id: props.companyId, price: price.trim() ? v : null, currency, asOf, source: source.trim() || null });
+      await ib.invoke('companies:setPrice', { id: company.id, price: price.trim() ? v : null, currency, asOf, source: source.trim() || null });
+      if ((symbol.trim() || null) !== company.quoteSymbol) await ib.invoke('quotes:setSymbol', { companyId: company.id, symbol: symbol.trim() || null });
       setEdit(false);
     } catch (err) {
       showToast(errorMessage(err), 'error');
     }
   };
+  const refresh = async () => {
+    setBusy(true);
+    try {
+      const r = await ib.invoke('quotes:refresh', { companyIds: [company.id], force: true });
+      if (r.failed.length) showToast(r.failed[0]!.error, 'error');
+    } catch (err) {
+      showToast(errorMessage(err), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (edit)
     return (
       <div className="kpi kpi-edit">
@@ -439,6 +464,17 @@ function PriceCard(props: { companyId: number; price: number | null; currency: s
         </div>
         <input className="input" type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} aria-label="Fecha del precio" />
         <input className="input" value={source} onChange={(e) => setSource(e.target.value)} placeholder="Fuente (p. ej. cierre en mi bróker)" />
+        <label className="field-label small muted" htmlFor={`qs-${company.id}`}>
+          Símbolo para cotizaciones automáticas
+        </label>
+        <input
+          id={`qs-${company.id}`}
+          className="input mono"
+          value={symbol}
+          onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+          placeholder={providerSymbol({ ...company, quoteSymbol: null }, 'eodhd') ?? 'p. ej. NOVO-B.CO'}
+          data-testid="quote-symbol"
+        />
         <div className="form-actions">
           <button className="btn btn-sm" onClick={() => setEdit(false)}>
             Cancelar
@@ -449,27 +485,45 @@ function PriceCard(props: { companyId: number; price: number | null; currency: s
         </div>
       </div>
     );
+  const kind = company.priceKind;
+  const change = company.priceChangePct;
   return (
-    <button className="kpi kpi-btn" onClick={() => setEdit(true)} data-testid="price-card">
+    <div className="kpi kpi-btn" role="button" tabIndex={0} onClick={() => setEdit(true)} onKeyDown={(e) => e.key === 'Enter' && setEdit(true)} data-testid="price-card" data-kind={kind ?? 'none'}>
       <div className="kpi-label">
-        Precio <span className="tag-mini">manual</span>
+        Precio <span className={`tag-mini ${kind === 'eodhd' || kind === 'finnhub' ? 'tag-delayed' : ''}`}>{company.price !== null ? priceBadge(kind) : 'sin dato'}</span>
+        {hasKey && auto && (
+          <button
+            className="icon-btn icon-btn-xs"
+            title="Actualizar cotización"
+            aria-label="Actualizar cotización"
+            onClick={(e) => {
+              e.stopPropagation();
+              void refresh();
+            }}
+            disabled={busy}
+            data-testid="quote-refresh"
+          >
+            <RefreshCw size={12} className={busy ? 'spin' : ''} />
+          </button>
+        )}
       </div>
-      {props.price !== null ? (
+      {company.price !== null ? (
         <>
           <div className="kpi-value mono">
-            {props.price.toLocaleString('es-ES', { maximumFractionDigits: 4 })} <span className="kpi-unit">{props.currency}</span>
+            {company.price.toLocaleString('es-ES', { maximumFractionDigits: 4 })} <span className="kpi-unit">{company.priceCurrency}</span>
+            {change !== null && <span className={`kpi-change ${change >= 0 ? 'pos' : 'neg'}`}>{`${change >= 0 ? '+' : ''}${change.toLocaleString('es-ES', { maximumFractionDigits: 2 })} %`}</span>}
           </div>
-          <div className="kpi-sub" title={props.source ?? ''}>
-            a {props.asOf ?? 's/f'} · {props.source || 'fuente no indicada'}
+          <div className="kpi-sub" title={company.priceSource ?? ''} data-testid="price-sub">
+            {kind === 'eodhd' || kind === 'finnhub' ? `${PROVIDER_LABEL[kind]} · dato de ${formatAsOf(company.priceAsOf)}` : `${formatAsOf(company.priceAsOf)} · ${company.priceSource || 'fuente no indicada'}`}
           </div>
         </>
       ) : (
         <>
           <div className="kpi-value muted">Cotización no disponible</div>
-          <div className="kpi-sub">Introdúcela a mano con su fecha</div>
+          <div className="kpi-sub">{hasKey ? (auto ? 'Pulsa ⟳ para obtenerla' : 'Indica ticker y bolsa, o el símbolo') : 'Configura una clave gratuita en Ajustes › Fuentes de datos, o captúrala desde una web'}</div>
         </>
       )}
-    </button>
+    </div>
   );
 }
 

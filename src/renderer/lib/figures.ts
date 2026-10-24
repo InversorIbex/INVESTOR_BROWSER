@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ib, useNotesRevision } from './ib';
-import type { FinancialFact, Note } from '../../shared/types';
-import type { Figure, MetricId, Scale } from '../../shared/finance';
+import type { Company, FinancialFact, FxRatesInfo, Note } from '../../shared/types';
+import { convert } from '../../shared/market';
+import type { Figure, FigureTable, MetricId, Scale } from '../../shared/finance';
 
 const fmtRaw = (v: number) => v.toLocaleString('es-ES', { maximumFractionDigits: 2 });
 
@@ -83,4 +84,44 @@ export function useCompanyFigures(companyId: number | null) {
   }, [companyId, rev]);
   const figures = useMemo(() => [...facts.map(secFactToFigure), ...notes.map(noteToFigure).filter((f): f is Figure => !!f)], [facts, notes]);
   return { figures, notes, facts };
+}
+
+// ---------------------------------------------------------------- price in the statements' currency
+
+let fxPromise: Promise<FxRatesInfo | null> | null = null;
+/** ECB reference rates, fetched once per session (and only when a conversion is needed). */
+export function useFx(needed: boolean): FxRatesInfo | null {
+  const [fx, setFx] = useState<FxRatesInfo | null>(null);
+  useEffect(() => {
+    if (!needed) return;
+    let alive = true;
+    fxPromise ??= ib.invoke('fx:rates').catch(() => null);
+    void fxPromise.then((r) => {
+      if (!r) fxPromise = null; // retry next time
+      if (alive) setFx(r);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [needed]);
+  return fx;
+}
+
+/** Currency of the statements in a figure table row (ignores per-share units). */
+export function statementCurrency(table: FigureTable, period: string | null | undefined): string | null {
+  const row = period ? table.get(period) : undefined;
+  return row ? ([...row.values()].find((v) => v.currency && !v.currency.includes('/'))?.currency ?? null) : null;
+}
+
+/**
+ * The company's price expressed in `currency`. Never mixes currencies silently:
+ * when a conversion is needed and no ECB rate is available, the price is null.
+ */
+export function priceIn(company: Company, currency: string | null, fx: FxRatesInfo | null): { value: number | null; note: string | null } {
+  if (company.price === null) return { value: null, note: null };
+  if (!currency || !company.priceCurrency || currency === company.priceCurrency) return { value: company.price, note: null };
+  const v = convert(company.price, company.priceCurrency, currency, fx);
+  return v === null
+    ? { value: null, note: `Precio en ${company.priceCurrency} y cuentas en ${currency}: falta el tipo de cambio.` }
+    : { value: v, note: `Precio convertido de ${company.priceCurrency} a ${currency} (BCE, ${fx?.date ?? ''}).` };
 }

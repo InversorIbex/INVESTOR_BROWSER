@@ -51,6 +51,9 @@ export interface TabsDeps {
   runCommand(id: CommandId): void;
   companies(): Company[];
   saveDraft(draft: SaveDraft): void;
+  /** Use a number selected on a page as the company's current price (asks for confirmation). */
+  capturePrice(draft: { url: string | null; title: string; companyId: number | null; text: string }): void;
+  companyLabel?(companyId: number): string | null;
 }
 
 export class TabManager {
@@ -743,6 +746,10 @@ export class TabManager {
       );
       if (parseFigure(text) && text.length < 200)
         items.push({ label: 'Guardar como cifra…', click: () => this.deps.saveDraft({ ...draftBase, text, kind: 'figure' }) });
+      if (parseFigure(text) && text.length < 60 && draftBase.companyId) {
+        const who = this.deps.companyLabel?.(draftBase.companyId) ?? 'la empresa';
+        items.push({ label: `Usar como cotización de ${who}…`, click: () => this.deps.capturePrice({ ...draftBase, text }) });
+      }
       items.push({ label: `Buscar «${preview}» en ${engine.name}`, click: () => this.create({ url: searchUrl(engineId, text), index }) });
       sep();
     }

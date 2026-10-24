@@ -1,7 +1,7 @@
 /**
  * Main process entry point: window, IPC, commands, persistence wiring.
  */
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, screen, session, type IpcMainInvokeEvent, type Rectangle } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, safeStorage, screen, session, type IpcMainInvokeEvent, type Rectangle } from 'electron';
 import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { Store } from './db';
@@ -11,6 +11,10 @@ import { DownloadManager } from './downloads';
 import { ResearchRepo, ValidationError } from './research';
 import { isValidContact, SecClient, SecError, type HttpFetch } from './sec';
 import { EsefClient } from './esef';
+import { MarketService, type QuoteResult } from './market';
+import { Secrets, SecretError } from './secrets';
+import { exchangeCurrency, normalizeQuoteCurrency, type FxRates, type QuoteProvider } from '../shared/market';
+import { parseFigure } from '../shared/finance';
 import { ProviderError } from './http';
 import { countryOf, pickAnnualFilings, toCompanyFacts } from '../shared/esef';
 import { normalizeCompanyFacts, parseSubmissions, parseTickerFile, searchTickers, type CompanyFacts } from '../shared/xbrl';
@@ -50,6 +54,10 @@ let popups: PopupNotice[] = [];
 let research: ResearchRepo;
 let sec: SecClient;
 let esef: EsefClient;
+let secrets: Secrets;
+let market: MarketService;
+let fxCache: { rates: FxRates; stale: boolean; fetchedAt: number } | null = null;
+let quoteTimer: NodeJS.Timeout | null = null;
 let companiesCache: Company[] = [];
 let stateQueued = false;
 let saveTimer: NodeJS.Timeout | null = null;
@@ -76,6 +84,21 @@ async function bootstrap(): Promise<void> {
   const webSession = configureWebSession({ store, win: () => win });
   sec = createSecClient();
   esef = createEsefClient();
+  // E2E tests on Linux run without a keyring: only an unpackaged build may use a test-only cipher.
+  const testCipher = !app.isPackaged && process.env.IB_TEST_ALLOW_WEAK_SECRETS === '1' && !safeStorage.isEncryptionAvailable();
+  secrets = new Secrets(
+    store,
+    testCipher
+      ? { isEncryptionAvailable: () => true, backend: () => 'test', encryptString: (s) => Buffer.from(Buffer.from(s, 'utf8').map((x) => x ^ 0x5a)), decryptString: (b) => Buffer.from(b.map((x) => x ^ 0x5a)).toString('utf8') }
+      : {
+          isEncryptionAvailable: () => safeStorage.isEncryptionAvailable(),
+          backend: () => (process.platform === 'linux' ? safeStorage.getSelectedStorageBackend() : 'os'),
+          encryptString: (s) => safeStorage.encryptString(s),
+          decryptString: (b) => safeStorage.decryptString(b),
+        },
+    !app.isPackaged && process.env.IB_TEST_ALLOW_WEAK_SECRETS === '1',
+  );
+  market = createMarket();
   downloads = new DownloadManager(store, {
     win: () => win,
     askLocation: () => settings.askDownloadLocation,
@@ -238,6 +261,11 @@ function createWindow(): void {
     runCommand,
     companies: () => companiesCache,
     saveDraft: (draft) => openSaveDraft(draft),
+    capturePrice: (d) => void capturePrice(d),
+    companyLabel: (id) => {
+      const c = companiesCache.find((x) => x.id === id);
+      return c ? (c.ticker ?? c.name) : null;
+    },
   });
 
   win.webContents.on('before-input-event', (event, input) => {
@@ -721,6 +749,8 @@ function registerIpc(): void {
   registerResearchIpc();
   registerSecIpc();
   registerEsefIpc();
+  registerMarketIpc();
+  scheduleQuotes(15_000);
   handle('data:clear', async (a: { what: 'cache' | 'siteData' }) => {
     const ses = session.fromPartition(WEB_PARTITION);
     if (a.what === 'cache') {
@@ -1018,6 +1048,141 @@ function registerEsefIpc(): void {
         stale: list.stale,
         fetchedAt: list.fetchedAt,
       };
+    }),
+  );
+}
+
+// ---------------------------------------------------------------- market data (delayed quotes, FX)
+
+function createMarket(): MarketService {
+  const override = process.env.IB_MARKET_BASE_URL ?? null;
+  return new MarketService({
+    fetch: {
+      finnhub: dataFetch('market-data', (h) => h === 'finnhub.io'),
+      eodhd: dataFetch('market-data', (h) => h === 'eodhd.com'),
+      ecb: dataFetch('market-data', (h) => h === 'data-api.ecb.europa.eu'),
+    },
+    cache: { get: (k) => store.cacheGet('market', k), set: (k, b, t) => store.cacheSet('market', k, b, t) },
+    kv: store,
+    secrets,
+    appVersion: app.getVersion(),
+    eodhdDailyLimit: () => settings.eodhdDailyLimit,
+    baseOverride: override,
+  });
+}
+
+function quoteTargets(ids?: number[]) {
+  // Followed companies first, then the oldest prices: the free EODHD quota goes where it matters.
+  return companiesCache
+    .filter((c) => (ids ? ids.includes(c.id) : c.followed))
+    .sort((a, b) => Number(b.followed) - Number(a.followed) || (a.priceFetchedAt ?? 0) - (b.priceFetchedAt ?? 0))
+    .map((c) => ({ companyId: c.id, ticker: c.ticker, exchange: c.exchange, quoteSymbol: c.quoteSymbol, priceFetchedAt: c.priceKind === 'manual' || c.priceKind === 'capture' ? null : c.priceFetchedAt }));
+}
+
+async function runQuotes(ids: number[] | undefined, force: boolean): Promise<QuoteResult[]> {
+  const results = await market.refresh(quoteTargets(ids), force);
+  const now = Date.now();
+  for (const r of results)
+    if (r.ok && r.price && r.asOf && r.provider && r.symbol)
+      research.setQuote(r.companyId, { price: r.price, currency: r.currency ?? null, asOf: r.asOf, provider: r.provider, symbol: r.symbol, prevClose: r.prevClose ?? null, changePct: r.changePct ?? null }, now);
+  if (results.some((r) => r.ok)) refreshCompanies();
+  return results;
+}
+
+function scheduleQuotes(delay: number): void {
+  if (quoteTimer) clearTimeout(quoteTimer);
+  quoteTimer = setTimeout(() => {
+    const hasKey = secrets.describe('finnhub').readable || secrets.describe('eodhd').readable;
+    const job = settings.quotesAuto && hasKey ? runQuotes(undefined, false).catch((err) => logError('quotes', err)) : Promise.resolve();
+    void job.finally(() => scheduleQuotes(30 * 60e3));
+  }, delay);
+  quoteTimer.unref?.();
+}
+
+async function getFx(force = false): Promise<{ rates: FxRates; stale: boolean; fetchedAt: number } | null> {
+  try {
+    fxCache = await market.fxRates(force);
+  } catch (err) {
+    if (!fxCache) logError('fx', err);
+  }
+  return fxCache;
+}
+
+/** A price selected by the user on a page they are reading. Always confirmed before saving. */
+async function capturePrice(d: { url: string | null; title: string; companyId: number | null; text: string }): Promise<void> {
+  const c = companiesCache.find((x) => x.id === d.companyId);
+  const parsed = parseFigure(d.text);
+  if (!c || !parsed || !(parsed.value > 0) || !win) return;
+  const currency = c.priceCurrency ?? exchangeCurrency(c.exchange, c.quoteSymbol) ?? 'EUR';
+  const norm = normalizeQuoteCurrency(parsed.value, currency);
+  let host = 'página web';
+  try {
+    host = d.url ? new URL(d.url).hostname.replace(/^www\./, '') : host;
+  } catch {
+    /* keep default */
+  }
+  const { response } = await dialog.showMessageBox(win, {
+    type: 'question',
+    buttons: ['Guardar precio', 'Cancelar'],
+    defaultId: 0,
+    cancelId: 1,
+    title: 'Usar como cotización',
+    message: `¿Guardar ${norm.price.toLocaleString('es-ES', { maximumFractionDigits: 4 })} ${norm.currency ?? ''} como precio de ${c.ticker ?? c.name}?`,
+    detail: `Texto seleccionado: «${d.text.slice(0, 60)}»${parsed.ambiguous ? '\n⚠ El separador es ambiguo: comprueba que el valor es correcto.' : ''}${currency === 'GBX' ? '\nPeniques convertidos a libras.' : ''}\nFuente: ${host}, ahora. Se guardará como «capturado», con la página como fuente; no es un dato en tiempo real.`,
+  });
+  if (response !== 0) return;
+  research.setPrice(c.id, { price: norm.price, currency: norm.currency, asOf: new Date().toISOString(), source: `${host} · ${d.title.slice(0, 120)}`, kind: 'capture' });
+  refreshCompanies();
+  send('toast', { message: `Precio de ${c.ticker ?? c.name} guardado desde ${host}.`, kind: 'info' });
+}
+
+function registerMarketIpc(): void {
+  const describe = () => ({
+    finnhub: secrets.describe('finnhub'),
+    eodhd: secrets.describe('eodhd'),
+    canStore: secrets.canStore(),
+    eodhdUsed: market.quotaUsed(),
+    eodhdLimit: settings.eodhdDailyLimit,
+  });
+  handle('quotes:status', () => describe());
+  handle('quotes:setKey', (a: { provider: QuoteProvider; key: string }) =>
+    providerGuard(a.provider === 'finnhub' ? 'Finnhub' : 'EODHD', async () => {
+      const can = secrets.canStore();
+      if (!can.ok) throw new ValidationError(can.reason ?? 'No se puede guardar la clave de forma segura.');
+      // Test first: an invalid key is never stored.
+      const message = await market.testKey(a.provider, a.key.trim());
+      try {
+        secrets.set(a.provider, a.key);
+      } catch (err) {
+        if (err instanceof SecretError) throw new ValidationError(err.message);
+        throw err;
+      }
+      scheduleQuotes(2_000);
+      return { message, status: describe() };
+    }),
+  );
+  handle('quotes:deleteKey', (a: { provider: QuoteProvider }) => {
+    secrets.delete(a.provider);
+    return describe();
+  });
+  handle('quotes:refresh', (a: { companyIds?: number[]; force?: boolean }) =>
+    providerGuard('cotizaciones', async () => {
+      const results = await runQuotes(a.companyIds, a.force ?? false);
+      return {
+        updated: results.filter((r) => r.ok).length,
+        failed: results.filter((r) => !r.ok).map((r) => ({ companyId: r.companyId, error: r.error ?? 'Sin dato' })),
+        eodhdLeft: market.quotaLeft(),
+      };
+    }),
+  );
+  handle('quotes:setSymbol', (a: { companyId: number; symbol: string | null }) => {
+    research.setQuoteSymbol(a.companyId, a.symbol);
+    refreshCompanies();
+  });
+  handle('fx:rates', (a: { force?: boolean } | undefined) =>
+    providerGuard('el BCE', async () => {
+      const r = await getFx(a?.force ?? false);
+      return r ? { date: r.rates.date, perEur: r.rates.perEur, stale: r.stale, fetchedAt: r.fetchedAt } : null;
     }),
   );
 }

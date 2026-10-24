@@ -6,6 +6,8 @@ import { metricDef, type FigureTable, type MetricId } from '../../shared/finance
 import { forensicsReport, qualityReport, roicSeries, type Criterion, type Signal, type Verdict } from '../../shared/analysis';
 import { multiples } from '../../shared/valuation';
 import { CATEGORY_SHORT, CODE_INFO, summarizeInsiders } from '../../shared/form4';
+import { priceIn, statementCurrency, useFx } from '../lib/figures';
+import { formatAsOf } from '../../shared/market';
 
 const VERDICT: Record<Verdict, { label: string; icon: typeof CheckCircle2 }> = {
   strong: { label: 'Fuerte', icon: CheckCircle2 },
@@ -25,8 +27,11 @@ export function QualityView({ company, table }: { company: Company; table: Figur
   const lastFy = report.years.at(-1);
   const shares = lastFy ? table.get(lastFy)?.get('diluted_shares')?.value ?? null : null;
   const g = (metric: MetricId) => (lastFy ? table.get(lastFy)?.get(metric)?.value ?? null : null);
+  const stmtCur = statementCurrency(table, lastFy);
+  const fx = useFx(!!company.price && !!company.priceCurrency && !!stmtCur && company.priceCurrency !== stmtCur);
+  const px = priceIn(company, stmtCur, fx);
   const mult = multiples(
-    { price: company.price, shares, grossDebt: g('gross_debt'), cash: g('cash'), netIncome: g('net_income'), ebit: g('ebit') ?? g('operating_income'), ebitda: g('ebitda'), fcf: g('fcf'), dividendPerShare: g('dividend_per_share') },
+    { price: px.value, shares, grossDebt: g('gross_debt'), cash: g('cash'), netIncome: g('net_income'), ebit: g('ebit') ?? g('operating_income'), ebitda: g('ebitda'), fcf: g('fcf'), dividendPerShare: g('dividend_per_share') },
     company.sectorKind,
   );
   const fcfYield = mult.find((m) => m.id === 'fcf_yield');
@@ -126,7 +131,7 @@ export function QualityView({ company, table }: { company: Company; table: Figur
       <section className="card">
         <h2>Precio frente a calidad (separado)</h2>
         {company.price === null ? (
-          <p className="muted small">Introduce el precio manualmente en el dossier para ver rentabilidad de FCL y PER. La calidad no depende del precio.</p>
+          <p className="muted small">Añade el precio en el dossier (cotización automática, capturada o manual) para ver rentabilidad de FCL y PER. La calidad no depende del precio.</p>
         ) : (
           <div className="kpis compact">
             <div className="kpi">
@@ -137,10 +142,11 @@ export function QualityView({ company, table }: { company: Company; table: Figur
             <div className="kpi">
               <div className="kpi-label">PER</div>
               <div className="kpi-value mono">{per?.value == null ? '—' : `${per.value.toLocaleString('es-ES', { maximumFractionDigits: 1 })}×`}</div>
-              <div className="kpi-sub">{per?.value === null ? per?.reason : `Precio a ${company.priceAsOf ?? 's/f'}`}</div>
+              <div className="kpi-sub">{per?.value === null ? per?.reason : `Precio a ${formatAsOf(company.priceAsOf)}`}</div>
             </div>
           </div>
         )}
+        {px.note && <p className="hint">{px.note}</p>}
       </section>
     </div>
   );

@@ -5,6 +5,7 @@ import { useCompanyFigures } from '../lib/figures';
 import { TickerChip } from '../components/research';
 import { buildFigureTable, formatMoney, formatMultiple, formatPct, periodSortKey, type MetricId } from '../../shared/finance';
 import { dcf, DEFAULT_SCENARIOS, multiples, sectorWarning, sensitivity, type DcfScenario, type SectorKind, type ValuationInputs } from '../../shared/valuation';
+import { convert, formatAsOf, PROVIDER_LABEL } from '../../shared/market';
 
 type FieldKey = keyof ValuationInputs;
 interface Field {
@@ -51,18 +52,31 @@ export function ValuationPage({ companyId }: { companyId: number | null }) {
   const table = useMemo(() => buildFigureTable(figures), [figures]);
   const latestFy = useMemo(() => [...table.keys()].filter((p) => p.startsWith('FY')).sort((a, b) => periodSortKey(b) - periodSortKey(a))[0] ?? null, [table]);
 
-  const loadFromCompany = () => {
+  const loadFromCompany = async () => {
     if (!company) return;
     const nextRaw = { ...raw };
     const nextProv: Partial<Record<FieldKey, Provenance>> = {};
     const row = latestFy ? table.get(latestFy) : undefined;
+    const figCurrency = row ? ([...row.values()].find((v) => v.currency && !v.currency.includes('/'))?.currency ?? null) : null;
     let loaded = 0;
     for (const f of FIELDS) {
       if (f.key === 'price') {
         if (company.price !== null) {
-          nextRaw.price = String(company.price);
-          nextProv.price = { kind: 'manual', label: `Manual · ${company.priceAsOf ?? 's/f'}`, title: company.priceSource ?? undefined };
-          loaded++;
+          const label = `${company.priceKind === 'eodhd' || company.priceKind === 'finnhub' ? `${PROVIDER_LABEL[company.priceKind]} (retrasado)` : company.priceKind === 'capture' ? 'Capturado' : 'Manual'} · ${formatAsOf(company.priceAsOf)}`;
+          let value: number | null = company.price;
+          let note = '';
+          // Price and financial statements must be in the same currency (e.g. an ADR in USD vs accounts in DKK).
+          if (figCurrency && company.priceCurrency && figCurrency !== company.priceCurrency) {
+            const fx = await ib.invoke('fx:rates').catch(() => null);
+            value = convert(company.price, company.priceCurrency, figCurrency, fx);
+            note = fx ? ` · convertido de ${company.priceCurrency} a ${figCurrency} con el tipo de referencia del BCE del ${fx.date}` : '';
+            if (value === null) showToast(`El precio está en ${company.priceCurrency} y las cifras en ${figCurrency}: no hay tipo de cambio disponible, introdúcelo convertido.`, 'error');
+          }
+          if (value !== null) {
+            nextRaw.price = String(+value.toFixed(4));
+            nextProv.price = { kind: 'manual', label: label + (note ? ' · convertido' : ''), title: `${company.priceSource ?? ''}${note}` };
+            loaded++;
+          }
         }
         continue;
       }
@@ -137,7 +151,7 @@ export function ValuationPage({ companyId }: { companyId: number | null }) {
               </option>
             ))}
           </select>
-          <button className="btn" disabled={!company} onClick={loadFromCompany} data-testid="load-figures">
+          <button className="btn" disabled={!company} onClick={() => void loadFromCompany()} data-testid="load-figures">
             Cargar cifras guardadas
           </button>
         </div>

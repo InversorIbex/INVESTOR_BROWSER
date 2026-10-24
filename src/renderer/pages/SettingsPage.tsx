@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 import { Kbd, Toggle } from '../components/ui';
 import { ib, runCommand, showToast, updateSettings, useSettings } from '../lib/ib';
 import { SecContactForm } from '../components/SecPanel';
-import type { SecStatus } from '../../shared/types';
+import type { QuotesStatus, SecStatus } from '../../shared/types';
 import { formatBytes } from '../components/ui';
 import { SEARCH_ENGINES, NEW_TAB_URL, normalizeInput } from '../../shared/url';
 import { COMMANDS, COMMAND_IDS } from '../../shared/commands';
@@ -323,9 +323,131 @@ function DataSourcesSection() {
         )}
       </div>
       <div className="subsection">
+        <h3>Cuentas europeas (ESEF) · gratuita, sin clave</h3>
+        <p className="section-note">
+          Informes anuales oficiales de cotizadas de la UE y Reino Unido desde filings.xbrl.org (XBRL International). Usa el mismo contacto que la SEC. Alemania y Suiza no tienen fuente automática: ver el dossier de cada empresa.
+        </p>
+      </div>
+      <QuotesSettings />
+      <div className="subsection">
         <h3>Próximamente</h3>
         <p className="section-note">FRED (macro, requiere tu clave gratuita), Treasury Fiscal Data y Eurostat. Ver docs/DATA_SOURCES.md.</p>
       </div>
     </Section>
+  );
+}
+
+const PROVIDERS: { id: 'finnhub' | 'eodhd'; name: string; what: string; signup: string }[] = [
+  { id: 'finnhub', name: 'Finnhub', what: 'Acciones de EE. UU. · plan gratuito ~60 consultas/minuto', signup: 'https://finnhub.io/register' },
+  { id: 'eodhd', name: 'EODHD', what: 'Cualquier bolsa (Madrid, París, Xetra, SIX, Milán, Londres…) · retraso de 15 min · plan gratuito 20 consultas/día', signup: 'https://eodhd.com/register' },
+];
+
+function QuotesSettings() {
+  const settings = useSettings();
+  const [status, setStatus] = useState<QuotesStatus | null>(null);
+  const [keys, setKeys] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<Record<string, string>>({});
+  const load = () => void ib.invoke('quotes:status').then(setStatus);
+  useEffect(load, []);
+  const save = async (id: 'finnhub' | 'eodhd') => {
+    setBusy(id);
+    setMsg((m) => ({ ...m, [id]: '' }));
+    try {
+      const r = await ib.invoke('quotes:setKey', { provider: id, key: keys[id] ?? '' });
+      setStatus(r.status);
+      setKeys((k) => ({ ...k, [id]: '' }));
+      setMsg((m) => ({ ...m, [id]: r.message }));
+    } catch (err) {
+      setMsg((m) => ({ ...m, [id]: err instanceof Error ? err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(err) }));
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <div className="subsection" data-testid="quotes-settings">
+      <h3>Cotizaciones con retraso · con tu clave gratuita</h3>
+      <p className="section-note">
+        No existe una fuente gratuita, sin clave y con permiso de uso automático para cotizaciones de EE. UU. y Europa. Date de alta gratis en uno o ambos proveedores y pega aquí tu clave. Se prueba con una consulta, se
+        guarda <strong>cifrada por el sistema operativo</strong> y nunca se muestra, se registra ni se exporta. Los precios se marcan siempre como retrasados, con su proveedor y la hora del dato. También puedes seleccionar
+        un precio en cualquier web y usar <em>clic derecho › Usar como cotización</em>.
+      </p>
+      {status && !status.canStore.ok && <p className="warn-text small">{status.canStore.reason}</p>}
+      {PROVIDERS.map((p) => {
+        const st = status?.[p.id];
+        return (
+          <div key={p.id} className="settings-row" data-testid={`key-${p.id}`}>
+            <div className="settings-label">
+              {p.name}
+              <span className="settings-hint">{p.what}</span>
+            </div>
+            <div className="settings-control" style={{ flex: '1 1 320px' }}>
+              {st?.configured ? (
+                <div className="key-row">
+                  <span className="mono small" data-testid={`key-${p.id}-status`}>
+                    {st.readable ? `Configurada ····${st.last4 ?? ''}` : 'Guardada pero ilegible en este equipo: vuelve a introducirla'}
+                  </span>
+                  <button className="btn btn-sm" onClick={() => void ib.invoke('quotes:deleteKey', { provider: p.id }).then(setStatus)}>
+                    Borrar clave
+                  </button>
+                </div>
+              ) : (
+                <div className="key-row">
+                  <input
+                    className="input mono"
+                    type="password"
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={keys[p.id] ?? ''}
+                    onChange={(e) => setKeys((k) => ({ ...k, [p.id]: e.target.value }))}
+                    placeholder={`Clave de ${p.name}`}
+                    data-testid={`key-${p.id}-input`}
+                  />
+                  <button className="btn btn-primary btn-sm" disabled={busy !== null || !(keys[p.id] ?? '').trim() || !status?.canStore.ok} onClick={() => void save(p.id)} data-testid={`key-${p.id}-save`}>
+                    {busy === p.id ? 'Probando…' : 'Probar y guardar'}
+                  </button>
+                  <button className="link-btn small" onClick={() => void ib.invoke('tabs:create', { url: p.signup })}>
+                    Crear cuenta gratuita
+                  </button>
+                </div>
+              )}
+              {msg[p.id] && (
+                <div className="small" data-testid={`key-${p.id}-msg`}>
+                  {msg[p.id]}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+      <Row label="Actualizar solas" hint="Al abrir la app y cada 30 minutos, solo si hay alguna clave">
+        <Toggle checked={settings.quotesAuto} onChange={(v) => void updateSettings({ quotesAuto: v })} label="Actualizar cotizaciones automáticamente" testId="quotes-auto" />
+      </Row>
+      <Row label="Cupo diario de EODHD" hint="Nunca se supera. Las empresas seguidas van primero">
+        <div>
+          <input
+            className="input mono input-xs"
+            type="number"
+            min={1}
+            max={100000}
+            value={settings.eodhdDailyLimit}
+            onChange={(e) => {
+              const v = Math.max(1, Math.min(100000, Math.round(Number(e.target.value) || 1)));
+              void updateSettings({ eodhdDailyLimit: v }).then(load);
+            }}
+            aria-label="Consultas diarias máximas a EODHD"
+            data-testid="eodhd-limit"
+          />
+          {status && (
+            <div className="small muted" data-testid="eodhd-used">
+              Hoy: {status.eodhdUsed} de {status.eodhdLimit}
+              <div className="quota-bar">
+                <span style={{ width: `${Math.min(100, (status.eodhdUsed / Math.max(1, status.eodhdLimit)) * 100)}%` }} />
+              </div>
+            </div>
+          )}
+        </div>
+      </Row>
+    </div>
   );
 }

@@ -34,6 +34,10 @@ const SettingsFields = {
   toolbar: ToolbarFields,
   /** "Name email" sent to the SEC as required by its fair-access policy. Empty = no SEC requests. */
   secContact: z.string().max(160),
+  /** Refresh delayed quotes automatically (only with the user's own API keys). */
+  quotesAuto: z.boolean(),
+  /** Never exceed this many EODHD calls per day (free plan: 20). */
+  eodhdDailyLimit: z.number().int().min(1).max(100_000),
 };
 
 export const DEFAULT_SETTINGS = {
@@ -52,6 +56,8 @@ export const DEFAULT_SETTINGS = {
   homePage: NEW_TAB_URL,
   toolbar: { home: false, bookmarkStar: true, downloads: true, palette: true, rightPanel: true },
   secContact: '',
+  quotesAuto: true,
+  eodhdDailyLimit: 20,
 } as const satisfies z.infer<z.ZodObject<typeof SettingsFields>>;
 
 /** Full settings object, as stored. */
@@ -219,6 +225,13 @@ export interface Company {
   lei: string | null;
   esefName: string | null;
   esefSyncedAt: number | null;
+  /** Provider symbol override (EODHD style, e.g. NOVO-B.CO). */
+  quoteSymbol: string | null;
+  /** How the current price was obtained: manual, captured from a page, or a delayed quote provider. */
+  priceKind: 'manual' | 'capture' | 'finnhub' | 'eodhd' | null;
+  priceFetchedAt: number | null;
+  pricePrevClose: number | null;
+  priceChangePct: number | null;
   createdAt: number;
   updatedAt: number;
   noteCount: number;
@@ -346,6 +359,28 @@ export interface EsefSyncResult {
   filings: number;
   entityName: string | null;
   fromCache: boolean;
+  stale: boolean;
+  fetchedAt: number;
+}
+
+export interface KeyStatus {
+  configured: boolean;
+  last4: string | null;
+  /** False when the stored key cannot be decrypted (e.g. profile copied to another user). */
+  readable: boolean;
+}
+
+export interface QuotesStatus {
+  finnhub: KeyStatus;
+  eodhd: KeyStatus;
+  canStore: { ok: boolean; reason?: string };
+  eodhdUsed: number;
+  eodhdLimit: number;
+}
+
+export interface FxRatesInfo {
+  date: string;
+  perEur: Record<string, number>;
   stale: boolean;
   fetchedAt: number;
 }

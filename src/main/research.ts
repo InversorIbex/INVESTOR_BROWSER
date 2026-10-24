@@ -6,6 +6,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
 import type { Company, EsefFilingRow, FilingRow, FinancialFact, InsiderRow, Note, NoteKind, Source } from '../shared/types';
 import { ESEF_BASE, LEI_RE, type EsefFiling } from '../shared/esef';
+import type { PriceKind, QuoteProvider } from '../shared/market';
 import { ownerRole, type Form4 } from '../shared/form4';
 import { filingIndexUrl, type NormalizeResult, type SubmissionsInfo } from '../shared/xbrl';
 import { CompanyInputSchema, NoteInputSchema, type CompanyInput, type NoteInput } from '../shared/ipc';
@@ -40,6 +41,11 @@ interface CompanyRow {
   lei: string | null;
   esef_name: string | null;
   esef_synced_at: number | null;
+  quote_symbol: string | null;
+  price_kind: string | null;
+  price_fetched_at: number | null;
+  price_prev_close: number | null;
+  price_change_pct: number | null;
   created_at: number;
   updated_at: number;
   note_count: number;
@@ -82,6 +88,11 @@ function toCompany(r: CompanyRow): Company {
     lei: r.lei ?? null,
     esefName: r.esef_name ?? null,
     esefSyncedAt: r.esef_synced_at ?? null,
+    quoteSymbol: r.quote_symbol ?? null,
+    priceKind: (r.price_kind as PriceKind | null) ?? (r.price !== null ? 'manual' : null),
+    priceFetchedAt: r.price_fetched_at ?? null,
+    pricePrevClose: r.price_prev_close ?? null,
+    priceChangePct: r.price_change_pct ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     noteCount: Number(r.note_count ?? 0),
@@ -219,10 +230,40 @@ export class ResearchRepo {
     this.db.prepare('DELETE FROM companies WHERE id = ?').run(id);
   }
 
-  setPrice(id: number, p: { price: number | null; currency?: string | null; asOf?: string | null; source?: string | null }): void {
+  setPrice(id: number, p: { price: number | null; currency?: string | null; asOf?: string | null; source?: string | null; kind?: PriceKind }): void {
+    const has = p.price !== null;
     this.db
-      .prepare('UPDATE companies SET price=?, price_currency=?, price_as_of=?, price_source=?, updated_at=? WHERE id=?')
-      .run(p.price, p.price === null ? null : (p.currency ?? null), p.price === null ? null : (p.asOf ?? null), p.price === null ? null : (p.source ?? null), Date.now(), id);
+      .prepare(
+        `UPDATE companies SET price=?, price_currency=?, price_as_of=?, price_source=?, price_kind=?, price_fetched_at=?,
+           price_prev_close=NULL, price_change_pct=NULL, updated_at=? WHERE id=?`,
+      )
+      .run(
+        p.price,
+        has ? (p.currency ?? null) : null,
+        has ? (p.asOf ?? null) : null,
+        has ? (p.source ?? null) : null,
+        has ? (p.kind ?? 'manual') : null,
+        has ? Date.now() : null,
+        Date.now(),
+        id,
+      );
+  }
+
+  /** A delayed quote from a provider. asOf is the provider's time of the data. */
+  setQuote(id: number, q: { price: number; currency: string | null; asOf: number; provider: QuoteProvider; symbol: string; prevClose: number | null; changePct: number | null }, fetchedAt: number): void {
+    if (!(q.price > 0) || !Number.isFinite(q.price)) throw new ValidationError('Precio no válido.');
+    this.db
+      .prepare(
+        `UPDATE companies SET price=?, price_currency=?, price_as_of=?, price_source=?, price_kind=?, price_fetched_at=?,
+           price_prev_close=?, price_change_pct=?, updated_at=? WHERE id=?`,
+      )
+      .run(q.price, q.currency, new Date(q.asOf).toISOString(), `${q.provider === 'eodhd' ? 'EODHD' : 'Finnhub'} · ${q.symbol}`, q.provider, fetchedAt, q.prevClose, q.changePct, Date.now(), id);
+  }
+
+  setQuoteSymbol(id: number, symbol: string | null): void {
+    const s = symbol?.trim().toUpperCase() || null;
+    if (s && !/^[A-Z0-9][A-Z0-9.\-]{0,19}$/.test(s)) throw new ValidationError('Símbolo no válido (p. ej. NOVO-B.CO o SAP.XETRA).');
+    this.db.prepare('UPDATE companies SET quote_symbol=?, updated_at=? WHERE id=?').run(s, Date.now(), id);
   }
 
   setSavedTabs(id: number, tabs: { url: string; title: string }[]): void {

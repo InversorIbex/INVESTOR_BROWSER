@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react';
 import { Info, TriangleAlert } from 'lucide-react';
 import { ib, useBrowser, useCompanies } from '../lib/ib';
-import { useManyCompanyFigures } from '../lib/figures';
+import { priceIn, useFx, useManyCompanyFigures } from '../lib/figures';
+import { formatAsOf } from '../../shared/market';
 import { TickerChip } from '../components/research';
 import { EmptyState } from '../components/ui';
 import { buildFigureTable, type Figure, type FigureTable, type MetricId } from '../../shared/finance';
 import { annualPeriods, forensicsReport, qualityReport, roicSeries } from '../../shared/analysis';
 import { multiples } from '../../shared/valuation';
-import type { Company } from '../../shared/types';
+import type { Company, FxRatesInfo } from '../../shared/types';
 
 const MAX = 5;
 
@@ -40,6 +41,8 @@ export function ComparePage() {
 
   const tables = useMemo(() => new Map(chosen.map((c) => [c.id, buildFigureTable(figures.get(c.id) ?? [])])), [figures, chosen.map((c) => c.id).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const fx = useFx(chosen.some((c) => c.price !== null && c.priceCurrency && currencyOf(tables.get(c.id)) && c.priceCurrency !== currencyOf(tables.get(c.id))));
+
   const toggle = (id: number) =>
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : s.length >= MAX ? s : [...s, id]));
 
@@ -52,7 +55,7 @@ export function ComparePage() {
       </div>
     );
 
-  const rows = buildRows(chosen, tables, figures);
+  const rows = buildRows(chosen, tables, figures, fx);
   const lastPeriods = chosen.map((c) => annualPeriods(tables.get(c.id) ?? new Map()).at(-1) ?? null);
   const fyEnds = chosen.map((c) => c.fiscalYearEnd).filter(Boolean);
   const currencies = new Set(chosen.map((c) => currencyOf(tables.get(c.id))).filter(Boolean));
@@ -137,7 +140,7 @@ function currencyOf(t: FigureTable | undefined): string | null {
   return null;
 }
 
-function buildRows(chosen: Company[], tables: Map<number, FigureTable>, figures: Map<number, Figure[]>): Row[] {
+function buildRows(chosen: Company[], tables: Map<number, FigureTable>, figures: Map<number, Figure[]>, fx: FxRatesInfo | null): Row[] {
   const ctx = chosen.map((c) => {
     const t = tables.get(c.id) ?? new Map();
     const periods = annualPeriods(t);
@@ -211,12 +214,14 @@ function buildRows(chosen: Company[], tables: Map<number, FigureTable>, figures:
     },
     {
       id: 'fcf_yield',
-      label: 'Rentabilidad FCL (precio manual)',
+      label: 'Rentabilidad FCL',
       better: 'high',
       cells: ctx.map((x) => {
         if (x.c.price === null) return { text: 'Sin precio', value: null };
-        const m = multiples({ price: x.c.price, shares: x.g('diluted_shares'), grossDebt: null, cash: null, netIncome: null, ebit: null, ebitda: null, fcf: x.g('fcf'), dividendPerShare: null }, x.c.sectorKind);
-        return cell(m.find((k) => k.id === 'fcf_yield')?.value ?? null, pct, `Precio ${x.c.price} a ${x.c.priceAsOf ?? 's/f'} · FCL ${x.last ?? ''}`);
+        const px = priceIn(x.c, currencyOf(x.t), fx);
+        if (px.value === null) return { text: 'Sin tipo de cambio', value: null, title: px.note ?? '' };
+        const m = multiples({ price: px.value, shares: x.g('diluted_shares'), grossDebt: null, cash: null, netIncome: null, ebit: null, ebitda: null, fcf: x.g('fcf'), dividendPerShare: null }, x.c.sectorKind);
+        return cell(m.find((k) => k.id === 'fcf_yield')?.value ?? null, pct, `Precio ${x.c.price} ${x.c.priceCurrency ?? ''} a ${formatAsOf(x.c.priceAsOf)} · FCL ${x.last ?? ''}${px.note ? '\n' + px.note : ''}`);
       }),
     },
   ];

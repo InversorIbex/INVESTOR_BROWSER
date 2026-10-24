@@ -223,6 +223,14 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (company_id, fxo_id)
   );
   `,
+  /* v6 — delayed quotes (own free API keys) and captured prices */ `
+  ALTER TABLE companies ADD COLUMN quote_symbol TEXT;
+  ALTER TABLE companies ADD COLUMN price_kind TEXT;
+  ALTER TABLE companies ADD COLUMN price_fetched_at INTEGER;
+  ALTER TABLE companies ADD COLUMN price_prev_close REAL;
+  ALTER TABLE companies ADD COLUMN price_change_pct REAL;
+  UPDATE companies SET price_kind = 'manual' WHERE price IS NOT NULL;
+  `,
 ];
 
 export class Store {

@@ -3388,3 +3388,50 @@ button {
 .btn-ghost:hover:not(:disabled) {
   border-color: var(--border-strong);
 }
+
+/* ---- quotes ---- */
+.tag-mini.tag-delayed {
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  color: var(--warn);
+}
+.kpi-change {
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 8px;
+}
+.kpi-change.pos {
+  color: var(--pos);
+}
+.kpi-change.neg {
+  color: var(--neg);
+}
+.icon-btn.icon-btn-xs {
+  width: 20px;
+  height: 20px;
+  margin-left: auto;
+}
+.field-label {
+  margin-top: 2px;
+}
+.key-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.key-row .input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.quota-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-hover);
+  overflow: hidden;
+  margin-top: 4px;
+}
+.quota-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
