@@ -24,6 +24,7 @@ import {
   type FxRates,
   type QuoteProvider,
 } from '../shared/market';
+import { parseEodhdDividends, parseFinnhubEarnings, type DividendRow, type EarningsRow } from '../shared/calendar';
 
 export interface QuoteTarget {
   companyId: number;
@@ -184,6 +185,37 @@ export class MarketService {
     const [q] = parseEodhdQuotes(r.data);
     if (!q) throw new ProviderError('bad-data', 'EODHD respondió sin datos.');
     return `Clave válida: Apple a ${q.price} USD (${new Date(q.asOf).toLocaleString('es-ES')}, retrasado).`;
+  }
+
+  // ---------------- calendar ----------------
+  /** US earnings calendar for a window (one call for all companies). Cache-only when `network` is false. */
+  async earnings(from: string, to: string, network: boolean): Promise<{ rows: EarningsRow[]; fetchedAt: number | null }> {
+    const key = 'finnhub:earnings';
+    const cached = this.o.cache.get(key);
+    const fromCache = () => (cached ? { rows: parseFinnhubEarnings(JSON.parse(cached.body)), fetchedAt: cached.fetchedAt } : { rows: [], fetchedAt: null });
+    const fk = this.o.secrets.get('finnhub');
+    if (!network || !fk) return fromCache();
+    const r = await this.finnhub.get(`/api/v1/calendar/earnings?from=${from}&to=${to}`, { cacheKey: key, ttlMs: 12 * 3600e3, headers: { 'X-Finnhub-Token': fk } });
+    return { rows: parseFinnhubEarnings(r.data), fetchedAt: r.fetchedAt };
+  }
+
+  /** Dividend history of one symbol (EODHD, 1 call of the daily quota, cached 30 days). Cache-only when `network` is false. */
+  async dividends(symbol: string, network: boolean): Promise<{ rows: DividendRow[]; fetchedAt: number | null; spent: boolean }> {
+    const key = `eodhd:div:${symbol}`;
+    const cached = this.o.cache.get(key);
+    const stale = !cached || this.now() - cached.fetchedAt > 30 * 86400e3;
+    const ek = this.o.secrets.get('eodhd');
+    if (!network || !stale || !ek || this.quotaLeft() < 1)
+      return { rows: cached ? parseEodhdDividends(JSON.parse(cached.body)) : [], fetchedAt: cached?.fetchedAt ?? null, spent: false };
+    const since = new Date(this.now() - 3 * 365 * 86400e3).toISOString().slice(0, 10);
+    try {
+      const r = await this.eodhd.get(`/api/div/${encodeURIComponent(symbol)}?from=${since}&fmt=json&api_token=${encodeURIComponent(ek)}`, { cacheKey: key, ttlMs: 0, force: true });
+      this.spend(1);
+      return { rows: parseEodhdDividends(r.data), fetchedAt: r.fetchedAt, spent: true };
+    } catch (err) {
+      if (err instanceof ProviderError && err.code === 'quota') this.exhaust();
+      throw err;
+    }
   }
 
   // ---------------- FX ----------------

@@ -28,6 +28,16 @@ export function startMockMarket(): Promise<{ server: Server; base: string; hits:
       const rows = syms.map((code) => ({ code, timestamp: ts, gmtoffset: 0, open: 50, high: 51, low: 49, close: code === 'AAPL.US' ? 231.4 : code === 'NOVO-B.CO' ? 402.5 : 51.36, volume: 1000, previousClose: 50.12, change: 1.24, change_p: 2.474 }));
       return json(rows.length === 1 ? rows[0] : rows);
     }
+    const day = (n: number) => new Date(Date.now() + n * 86400e3).toISOString().slice(0, 10);
+    if (u.pathname === '/api/v1/calendar/earnings') {
+      if (headerToken !== KEYS.finnhub) return json({ error: 'Invalid API key' }, 401);
+      return json({ earningsCalendar: [{ date: day(5), epsActual: null, epsEstimate: 1.62, hour: 'amc', quarter: 4, revenueActual: null, revenueEstimate: 1, symbol: 'AAPL', year: 2026 }, { date: day(9), hour: 'bmo', symbol: 'MSFT', quarter: 1, year: 2027 }] });
+    }
+    if (u.pathname.startsWith('/api/div/')) {
+      if (u.searchParams.get('api_token') !== KEYS.eodhd) return json({ error: 'Unauthenticated' }, 401);
+      if (!u.pathname.endsWith('ITX.MC')) return json([]);
+      return json([-275, -184, -92, 8].map((n) => ({ date: day(n), declarationDate: day(n - 20), recordDate: day(n + 1), paymentDate: day(n + 2), period: 'Quarterly', value: 0.77, unadjustedValue: 0.77, currency: 'EUR' })));
+    }
     if (u.pathname.startsWith('/service/data/EXR/')) return res.writeHead(200, { 'Content-Type': 'text/csv' }).end(ECB_CSV);
     res.writeHead(404).end();
   });

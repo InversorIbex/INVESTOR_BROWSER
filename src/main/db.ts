@@ -263,6 +263,17 @@ const MIGRATIONS: string[] = [
     positions INTEGER NOT NULL
   );
   `,
+  /* v8 — your own calendar events */ `
+  CREATE TABLE calendar_events (
+    id         INTEGER PRIMARY KEY,
+    company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    date       TEXT    NOT NULL,
+    type       TEXT    NOT NULL CHECK (type IN ('earnings','exdiv','payment','meeting','other')),
+    note       TEXT    NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX calendar_events_date ON calendar_events(date);
+  `,
 ];
 
 export class Store {

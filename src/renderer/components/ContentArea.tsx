@@ -14,6 +14,7 @@ import { ValuationPage } from '../pages/ValuationPage';
 import { ComparePage } from '../pages/ComparePage';
 import { PortfolioPage } from '../pages/PortfolioPage';
 import { ScreenerPage } from '../pages/ScreenerPage';
+import { CalendarPage } from '../pages/CalendarPage';
 
 export function ContentArea({ findRequest }: { findRequest: number }) {
   const tab = useActiveTab();
@@ -71,6 +72,7 @@ export function ContentArea({ findRequest }: { findRequest: number }) {
         {internal === 'compare' && <ComparePage />}
         {internal === 'portfolio' && <PortfolioPage />}
         {internal === 'screener' && <ScreenerPage />}
+        {internal === 'calendar' && <CalendarPage />}
         {!internal && tab?.error && <ErrorPage error={tab.error} />}
         {!internal && !tab?.error && overlay.active && (
           <div className="snapshot" aria-hidden>

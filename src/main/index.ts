@@ -12,11 +12,13 @@ import { ResearchRepo, ValidationError } from './research';
 import { isValidContact, SecClient, SecError, type HttpFetch } from './sec';
 import { EsefClient } from './esef';
 import { PortfolioRepo, type PortfolioExport } from './portfolio';
+import { CalendarRepo, buildEvents } from './calendar';
+import { EVENT_LABEL, toIcs, type EventType } from '../shared/calendar';
 import { impliedFx, parseOpsCsv } from '../shared/portfolio';
 import type { OpInput } from '../shared/portfolioSchema';
 import { MarketService, type QuoteResult } from './market';
 import { Secrets, SecretError } from './secrets';
-import { exchangeCurrency, normalizeQuoteCurrency, type FxRates, type QuoteProvider } from '../shared/market';
+import { exchangeCurrency, normalizeQuoteCurrency, providerSymbol, type FxRates, type QuoteProvider } from '../shared/market';
 import { parseFigure } from '../shared/finance';
 import { ProviderError } from './http';
 import { countryOf, pickAnnualFilings, toCompanyFacts } from '../shared/esef';
@@ -56,6 +58,7 @@ let settings: Settings;
 let popups: PopupNotice[] = [];
 let research: ResearchRepo;
 let portfolio: PortfolioRepo;
+let calendar: CalendarRepo;
 let sec: SecClient;
 let esef: EsefClient;
 let secrets: Secrets;
@@ -82,6 +85,7 @@ async function bootstrap(): Promise<void> {
   store = opened;
   research = new ResearchRepo(store.db);
   portfolio = new PortfolioRepo(store.db, research);
+  calendar = new CalendarRepo(store.db);
   companiesCache = research.listCompanies();
   settings = store.getSettings();
   nativeTheme.themeSource = themeSourceFor(settings.theme);
@@ -776,6 +780,7 @@ function registerIpc(): void {
   registerEsefIpc();
   registerMarketIpc();
   registerPortfolioIpc();
+  registerCalendarIpc();
   scheduleQuotes(15_000);
   handle('data:clear', async (a: { what: 'cache' | 'siteData' }) => {
     const ses = session.fromPartition(WEB_PARTITION);
@@ -940,6 +945,85 @@ async function exportResearch(companyId: number | undefined, format: 'markdown' 
   const body = format === 'json' ? JSON.stringify(research.exportJson(companyId), null, 2) : research.exportMarkdown(companyId);
   writeFileSync(res.filePath, body, 'utf8');
   send('toast', { message: 'Investigación exportada.', kind: 'info' });
+}
+
+// ---------------------------------------------------------------- calendar
+
+/** Companies the calendar follows: portfolio, watchlist and followed companies. */
+function calendarScope() {
+  const p = portfolio.get();
+  const ids = new Set([...p.holdings.map((h) => h.companyId), ...p.watchlist.map((w) => w.companyId), ...companiesCache.filter((c) => c.followed).map((c) => c.id)]);
+  const held = new Set(p.holdings.map((h) => h.companyId));
+  // Holdings first: the free EODHD quota goes where it matters.
+  return companiesCache.filter((c) => ids.has(c.id)).sort((a, b) => Number(held.has(b.id)) - Number(held.has(a.id)));
+}
+
+async function calendarEvents(from: string, to: string) {
+  const scope = calendarScope();
+  const earn = await market.earnings(from, to, false);
+  let withDividends = 0;
+  const inputs = [];
+  for (const c of scope) {
+    const sym = providerSymbol(c, 'eodhd');
+    const div = sym ? await market.dividends(sym, false) : null;
+    if (div?.fetchedAt) withDividends++;
+    inputs.push({ company: c, filings: research.listFilings(c.id, 60), esef: research.listEsefFilings(c.id), dividends: div?.rows ?? null });
+  }
+  const events = [...buildEvents(inputs, earn.rows, from, to, earn.fetchedAt), ...calendar.list(from, to)].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.companyId - b.companyId));
+  return { events, earningsAt: earn.fetchedAt, withDividends, scope: scope.length };
+}
+
+function registerCalendarIpc(): void {
+  handle('calendar:get', (a: { from: string; to: string }) => providerGuard('el calendario', () => calendarEvents(a.from, a.to)));
+  handle('calendar:refresh', (a: { from: string; to: string }) =>
+    providerGuard('el calendario', async () => {
+      const finnhub = secrets.describe('finnhub').readable;
+      const eodhd = secrets.describe('eodhd').readable;
+      let earnings = 0;
+      if (finnhub) {
+        const to90 = new Date(Date.now() + 90 * 86400e3).toISOString().slice(0, 10);
+        earnings = (await market.earnings(a.from < new Date().toISOString().slice(0, 10) ? new Date().toISOString().slice(0, 10) : a.from, a.to > to90 ? a.to : to90, true)).rows.length;
+      }
+      let dividends = 0;
+      let pending = 0;
+      for (const c of calendarScope()) {
+        const sym = providerSymbol(c, 'eodhd');
+        if (!sym || !eodhd) continue;
+        if (market.quotaLeft() < 1) {
+          pending++;
+          continue;
+        }
+        try {
+          if ((await market.dividends(sym, true)).spent) dividends++;
+        } catch (err) {
+          if (err instanceof ProviderError && (err.code === 'quota' || err.code === 'forbidden')) {
+            pending++;
+            continue;
+          }
+          if (!(err instanceof ProviderError)) throw err;
+        }
+      }
+      return { earnings, dividends, pending, eodhdLeft: market.quotaLeft(), finnhub, eodhd };
+    }),
+  );
+  handle('calendar:add', (a: { companyId: number; date: string; type: EventType; note: string }) => {
+    if (!companiesCache.some((c) => c.id === a.companyId)) throw new Error('La empresa no existe.');
+    calendar.add(a.companyId, a.date, a.type, a.note);
+  });
+  handle('calendar:remove', (a: { id: number }) => calendar.remove(a.id));
+  handle('calendar:exportIcs', async (a: { from: string; to: string }) => {
+    if (!win) return null;
+    const { events } = await calendarEvents(a.from, a.to);
+    const res = await dialog.showSaveDialog(win, { title: 'Exportar calendario', defaultPath: 'calendario-bursatil.ics', filters: [{ name: 'iCalendar', extensions: ['ics'] }] });
+    if (res.canceled || !res.filePath) return null;
+    const name = (id: number) => {
+      const c = companiesCache.find((x) => x.id === id);
+      return c ? (c.ticker ?? c.name) : '';
+    };
+    writeFileSync(res.filePath, toIcs(events.map((e) => ({ ...e, title: `${name(e.companyId)} · ${EVENT_LABEL[e.type]}${e.amount ? ` ${e.amount} ${e.currency ?? ''}` : ''}` }))), 'utf8');
+    send('toast', { message: `Calendario exportado: ${events.length} evento(s).`, kind: 'info' });
+    return res.filePath;
+  });
 }
 
 // ---------------------------------------------------------------- portfolio

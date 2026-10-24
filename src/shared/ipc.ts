@@ -34,6 +34,7 @@ import type {
   PortfolioData,
 } from './types';
 import { OpInputSchema } from './portfolioSchema';
+import type { CalEvent } from './calendar';
 
 const Id = z.string().min(1).max(64);
 const Text = (max: number) => z.string().max(max);
@@ -168,6 +169,11 @@ export const RequestSchemas = {
   'portfolio:export': z.undefined(),
   'watchlist:set': z.object({ companyId: PosInt, target: Finite.positive().nullable(), note: Text(5000).nullable() }).strict(),
   'watchlist:remove': z.object({ companyId: PosInt }).strict(),
+  'calendar:get': z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).strict(),
+  'calendar:refresh': z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).strict(),
+  'calendar:add': z.object({ companyId: PosInt, date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), type: z.enum(['earnings', 'exdiv', 'payment', 'meeting', 'other']), note: Text(500) }).strict(),
+  'calendar:remove': z.object({ id: PosInt }).strict(),
+  'calendar:exportIcs': z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).strict(),
   'quotes:status': z.undefined(),
   'quotes:setKey': z.object({ provider: z.enum(['finnhub', 'eodhd']), key: z.string().trim().min(8).max(128).regex(/^[A-Za-z0-9._\-]+$/) }).strict(),
   'quotes:deleteKey': z.object({ provider: z.enum(['finnhub', 'eodhd']) }).strict(),
@@ -252,6 +258,11 @@ export interface ResponseMap {
   'portfolio:export': string | null;
   'watchlist:set': PortfolioData;
   'watchlist:remove': PortfolioData;
+  'calendar:get': { events: CalEvent[]; earningsAt: number | null; withDividends: number; scope: number };
+  'calendar:refresh': { earnings: number; dividends: number; pending: number; eodhdLeft: number; finnhub: boolean; eodhd: boolean };
+  'calendar:add': void;
+  'calendar:remove': void;
+  'calendar:exportIcs': string | null;
   'quotes:status': QuotesStatus;
   'quotes:setKey': { message: string; status: QuotesStatus };
   'quotes:deleteKey': QuotesStatus;
