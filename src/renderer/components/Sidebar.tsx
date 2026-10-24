@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { BookOpen, Bookmark as BookmarkIcon, Calculator, ChevronDown, ChevronRight, Clock, Download, Plus, Settings as Cog, Volume2, VolumeX, X } from 'lucide-react';
+import { BookOpen, Bookmark as BookmarkIcon, Briefcase, Calculator, CalendarDays, ListFilter, ChevronDown, ChevronRight, Clock, Download, Plus, Settings as Cog, Volume2, VolumeX, X } from 'lucide-react';
 import { BrandMark, Favicon } from './ui';
 import { ib, runCommand, useBookmarks, useBrowser, useCompanies, useDownloads } from '../lib/ib';
 import { TickerChip } from './research';
@@ -76,6 +76,18 @@ export function Sidebar({ width, showTabs, onResize }: { width: number; showTabs
       )}
 
       {!showTabs && <div className="sb-flex" />}
+
+      <nav className="sb-invest" aria-label="Herramientas de inversión">
+        <button className="sb-invest-btn" onClick={() => runCommand('open.portfolio')} title="Cartera y seguimiento (Ctrl+Shift+M)" data-testid="open-portfolio">
+          <Briefcase size={14} /> Cartera
+        </button>
+        <button className="sb-invest-btn" onClick={() => runCommand('open.screener')} title="Screener de empresas" data-testid="open-screener">
+          <ListFilter size={14} /> Screener
+        </button>
+        <button className="sb-invest-btn" onClick={() => runCommand('open.calendar')} title="Calendario de resultados y dividendos" data-testid="open-calendar">
+          <CalendarDays size={14} /> Agenda
+        </button>
+      </nav>
 
       <div className="sb-section sb-companies" data-testid="sb-companies">
         <div className="sb-section-row">

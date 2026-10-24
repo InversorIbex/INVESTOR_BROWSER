@@ -231,6 +231,38 @@ const MIGRATIONS: string[] = [
   ALTER TABLE companies ADD COLUMN price_change_pct REAL;
   UPDATE companies SET price_kind = 'manual' WHERE price IS NOT NULL;
   `,
+  /* v7 — portfolio (FIFO operations), watchlist and daily snapshots */ `
+  CREATE TABLE portfolio (
+    company_id INTEGER PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,
+    added_at   INTEGER NOT NULL
+  );
+  CREATE TABLE portfolio_ops (
+    id         INTEGER PRIMARY KEY,
+    company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    date       TEXT,
+    side       TEXT    NOT NULL CHECK (side IN ('buy','sell')),
+    qty        REAL    NOT NULL CHECK (qty > 0),
+    price      REAL    NOT NULL CHECK (price >= 0),
+    currency   TEXT    NOT NULL,
+    fee_eur    REAL    NOT NULL DEFAULT 0,
+    fx_per_eur REAL    NOT NULL CHECK (fx_per_eur > 0),
+    source     TEXT    NOT NULL DEFAULT 'manual',
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX portfolio_ops_company ON portfolio_ops(company_id, date);
+  CREATE TABLE watchlist (
+    company_id INTEGER PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,
+    target     REAL,
+    note       TEXT,
+    added_at   INTEGER NOT NULL
+  );
+  CREATE TABLE portfolio_snapshots (
+    date      TEXT PRIMARY KEY,
+    total_eur REAL NOT NULL,
+    cost_eur  REAL NOT NULL,
+    positions INTEGER NOT NULL
+  );
+  `,
 ];
 
 export class Store {

@@ -12,6 +12,7 @@ import { ResearchPage } from '../pages/ResearchPage';
 import { CompanyPage } from '../pages/CompanyPage';
 import { ValuationPage } from '../pages/ValuationPage';
 import { ComparePage } from '../pages/ComparePage';
+import { PortfolioPage } from '../pages/PortfolioPage';
 
 export function ContentArea({ findRequest }: { findRequest: number }) {
   const tab = useActiveTab();
@@ -67,6 +68,7 @@ export function ContentArea({ findRequest }: { findRequest: number }) {
         {internal === 'company' && route?.id && <CompanyPage key={route.id} id={route.id} />}
         {internal === 'valuation' && <ValuationPage key={route?.id ?? 0} companyId={route?.id ?? null} />}
         {internal === 'compare' && <ComparePage />}
+        {internal === 'portfolio' && <PortfolioPage />}
         {!internal && tab?.error && <ErrorPage error={tab.error} />}
         {!internal && !tab?.error && overlay.active && (
           <div className="snapshot" aria-hidden>

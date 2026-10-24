@@ -3435,3 +3435,294 @@ button {
   height: 100%;
   background: var(--accent);
 }
+
+/* ---- investor nav in the sidebar ---- */
+.sb-invest {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 6px 8px 2px;
+  border-top: 1px solid var(--border);
+}
+.sb-invest-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 6px 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.sb-invest-btn:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+
+/* ---- portfolio ---- */
+.page .wide,
+.page > .wide {
+  max-width: 1240px;
+}
+.page-head.wide {
+  max-width: 1240px;
+}
+.page-head h1 svg {
+  vertical-align: -2px;
+  color: var(--accent);
+}
+.pf-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.pf-summary .kpis {
+  margin: 0;
+}
+.kpi-main .kpi-value {
+  font-size: 26px;
+}
+.pf-charts {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+@container (max-width: 760px) {
+  .pf-charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 1000px) {
+  .pf-charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.pf-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.pf-chart.empty {
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  padding: 18px;
+  min-height: 110px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+.pf-mix .mixbar {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--surface-hover);
+  margin: 6px 0;
+}
+.pf-mix .mixbar span {
+  display: block;
+  height: 100%;
+}
+.mixlegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.mixlegend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 5px;
+}
+.dossier-tabs.wide {
+  max-width: 1240px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.dossier-tabs .count {
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: 4px;
+}
+.pf-table td,
+.pf-table th {
+  white-space: nowrap;
+}
+.pf-table .l {
+  text-align: left;
+}
+.pf-row {
+  cursor: pointer;
+}
+.pf-row.is-open td {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.pf-row.is-closed td {
+  opacity: 0.6;
+}
+.pf-co {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 280px;
+  min-width: 0;
+}
+.pf-table td .sub {
+  display: block;
+  font-size: 11px;
+  opacity: 0.85;
+}
+.pf-bar {
+  display: inline-block;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--accent);
+  opacity: 0.7;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.th-sort {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+th[aria-sort='ascending'] .th-sort::after {
+  content: ' ↑';
+}
+th[aria-sort='descending'] .th-sort::after {
+  content: ' ↓';
+}
+.pf-detail > td {
+  background: var(--surface);
+  white-space: normal;
+  padding: 14px 16px 16px;
+}
+.pf-detail-body {
+  display: grid;
+  gap: 14px;
+  text-align: left;
+}
+.dgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px 18px;
+}
+.dgrid .k {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.dgrid .v {
+  font-size: 14px;
+  margin-top: 2px;
+}
+.dgrid .v small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--font);
+}
+.pf-opform {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  align-items: flex-end;
+}
+.pf-opform label {
+  display: grid;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.pf-opform .input {
+  width: 130px;
+}
+.pf-opform select.input {
+  width: 260px;
+}
+.pf-preview {
+  flex-basis: 100%;
+  color: var(--muted);
+  min-height: 16px;
+}
+.pf-preview b {
+  color: var(--text);
+}
+.pf-msg {
+  color: var(--text-2);
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.seg button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 6px 12px;
+  font-weight: 600;
+  font-size: 12.5px;
+}
+.seg button[aria-pressed='true'] {
+  background: var(--accent);
+  color: #fff;
+}
+.seg button.sell[aria-pressed='true'] {
+  background: var(--neg);
+}
+.pf-ops {
+  font-size: 12px;
+}
+.pf-ops td,
+.pf-ops th {
+  padding: 5px 8px;
+}
+.pf-detail-foot {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.pf-add {
+  margin-top: 12px;
+}
+.pf-add summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--accent);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pf-add[open] summary {
+  margin-bottom: 12px;
+}
+.pf-cell {
+  width: 90px;
+  text-align: right;
+}
+.pf-note {
+  width: 100%;
+  min-width: 180px;
+}
+.pf-summary .kpi-sub {
+  white-space: normal;
+}

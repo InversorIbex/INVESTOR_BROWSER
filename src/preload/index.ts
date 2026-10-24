@@ -6,7 +6,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { EventChannel, IbApi, RequestChannel } from '../shared/ipc';
 
 // Duplicated (not imported) so the preload bundle stays tiny and self-contained.
-const EVENTS: readonly EventChannel[] = ['state', 'settings', 'bookmarks', 'downloads', 'command', 'popup', 'resolvedTheme', 'toast', 'companies', 'notesChanged', 'saveDraft'];
+const EVENTS: readonly EventChannel[] = ['state', 'settings', 'bookmarks', 'downloads', 'command', 'popup', 'resolvedTheme', 'toast', 'companies', 'notesChanged', 'saveDraft', 'portfolio'];
 
 const api: IbApi = {
   invoke: ((channel: RequestChannel, arg?: unknown) => ipcRenderer.invoke(`ib:${channel}`, arg)) as IbApi['invoke'],

@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { EventChannel, EventMap, IbApi } from '../../shared/ipc';
 import type { CommandId } from '../../shared/commands';
-import type { Bookmark, BrowserSnapshot, Company, DownloadItemState, PopupNotice, SaveDraft, Settings } from '../../shared/types';
+import type { Bookmark, BrowserSnapshot, Company, DownloadItemState, PopupNotice, PortfolioData, SaveDraft, Settings } from '../../shared/types';
 import { DEFAULT_SETTINGS } from '../../shared/types';
 
 declare global {
@@ -41,6 +41,9 @@ const bookmarksStore = channelStore('bookmarks', [] as Bookmark[], () => ib.invo
 const downloadsStore = channelStore('downloads', [] as DownloadItemState[], () => ib.invoke('downloads:list'));
 const popupStore = channelStore('popup', [] as PopupNotice[]);
 const companiesStore = channelStore('companies', [] as Company[], () => ib.invoke('companies:list'));
+const portfolioStore = channelStore('portfolio', { holdings: [], ops: [], watchlist: [], snapshots: [] } as PortfolioData, () => ib.invoke('portfolio:get'));
+/** Apply the data returned by a portfolio action (keeps every view in sync). */
+export const setPortfolio = (d: PortfolioData) => portfolioStore.set(d);
 const themeStore = channelStore(
   'resolvedTheme',
   (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') as 'dark' | 'light',
@@ -55,6 +58,7 @@ export const useDownloads = () => use(downloadsStore);
 export const usePopups = () => use(popupStore);
 export const useResolvedTheme = () => use(themeStore);
 export const useCompanies = () => use(companiesStore);
+export const usePortfolio = () => use(portfolioStore);
 export function useCompany(id: number | null | undefined): Company | null {
   const list = useCompanies();
   return id ? (list.find((c) => c.id === id) ?? null) : null;

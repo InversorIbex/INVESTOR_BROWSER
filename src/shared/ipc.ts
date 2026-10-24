@@ -31,7 +31,9 @@ import type {
   EsefSyncResult,
   QuotesStatus,
   FxRatesInfo,
+  PortfolioData,
 } from './types';
+import { OpInputSchema } from './portfolioSchema';
 
 const Id = z.string().min(1).max(64);
 const Text = (max: number) => z.string().max(max);
@@ -156,6 +158,16 @@ export const RequestSchemas = {
   'sec:clearCache': z.undefined(),
   'sec:insidersSync': z.object({ companyId: PosInt, limit: z.number().int().min(1).max(100).optional() }).strict(),
   'sec:insiders': z.object({ companyId: PosInt }).strict(),
+  'portfolio:get': z.undefined(),
+  'portfolio:add': z.object({ companyId: PosInt }).strict(),
+  'portfolio:remove': z.object({ companyId: PosInt }).strict(),
+  'portfolio:addOp': OpInputSchema,
+  'portfolio:removeOp': z.object({ id: PosInt }).strict(),
+  'portfolio:snapshot': z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), totalEur: Finite.min(0), costEur: Finite.min(0), positions: z.number().int().min(0).max(100_000) }).strict(),
+  'portfolio:import': z.undefined(),
+  'portfolio:export': z.undefined(),
+  'watchlist:set': z.object({ companyId: PosInt, target: Finite.positive().nullable(), note: Text(5000).nullable() }).strict(),
+  'watchlist:remove': z.object({ companyId: PosInt }).strict(),
   'quotes:status': z.undefined(),
   'quotes:setKey': z.object({ provider: z.enum(['finnhub', 'eodhd']), key: z.string().trim().min(8).max(128).regex(/^[A-Za-z0-9._\-]+$/) }).strict(),
   'quotes:deleteKey': z.object({ provider: z.enum(['finnhub', 'eodhd']) }).strict(),
@@ -230,6 +242,16 @@ export interface ResponseMap {
   'sec:clearCache': void;
   'sec:insidersSync': InsiderSyncResult;
   'sec:insiders': InsiderRow[];
+  'portfolio:get': PortfolioData;
+  'portfolio:add': PortfolioData;
+  'portfolio:remove': PortfolioData;
+  'portfolio:addOp': PortfolioData;
+  'portfolio:removeOp': PortfolioData;
+  'portfolio:snapshot': void;
+  'portfolio:import': { companies: number; holdings: number; ops: number; watchlist: number; warnings: string[] } | null;
+  'portfolio:export': string | null;
+  'watchlist:set': PortfolioData;
+  'watchlist:remove': PortfolioData;
   'quotes:status': QuotesStatus;
   'quotes:setKey': { message: string; status: QuotesStatus };
   'quotes:deleteKey': QuotesStatus;
@@ -255,6 +277,7 @@ export interface EventMap {
   companies: Company[];
   notesChanged: { companyId: number | null };
   saveDraft: SaveDraft;
+  portfolio: PortfolioData;
 }
 export type EventChannel = keyof EventMap;
 export const EVENT_CHANNELS: readonly EventChannel[] = [
@@ -269,6 +292,7 @@ export const EVENT_CHANNELS: readonly EventChannel[] = [
   'companies',
   'notesChanged',
   'saveDraft',
+  'portfolio',
 ];
 
 /** Shape of `window.ib` exposed by the preload to the trusted UI only. */

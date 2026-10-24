@@ -11,6 +11,9 @@ import { DownloadManager } from './downloads';
 import { ResearchRepo, ValidationError } from './research';
 import { isValidContact, SecClient, SecError, type HttpFetch } from './sec';
 import { EsefClient } from './esef';
+import { PortfolioRepo, type PortfolioExport } from './portfolio';
+import { impliedFx, parseOpsCsv } from '../shared/portfolio';
+import type { OpInput } from '../shared/portfolioSchema';
 import { MarketService, type QuoteResult } from './market';
 import { Secrets, SecretError } from './secrets';
 import { exchangeCurrency, normalizeQuoteCurrency, type FxRates, type QuoteProvider } from '../shared/market';
@@ -52,6 +55,7 @@ let downloads: DownloadManager;
 let settings: Settings;
 let popups: PopupNotice[] = [];
 let research: ResearchRepo;
+let portfolio: PortfolioRepo;
 let sec: SecClient;
 let esef: EsefClient;
 let secrets: Secrets;
@@ -77,6 +81,7 @@ async function bootstrap(): Promise<void> {
   }
   store = opened;
   research = new ResearchRepo(store.db);
+  portfolio = new PortfolioRepo(store.db, research);
   companiesCache = research.listCompanies();
   settings = store.getSettings();
   nativeTheme.themeSource = themeSourceFor(settings.theme);
@@ -533,6 +538,26 @@ function runCommand(id: CommandId): void {
     case 'open.compare':
       openInternal('ib://compare');
       break;
+    case 'open.portfolio':
+      openInternal('ib://portfolio');
+      break;
+    case 'open.screener':
+      openInternal('ib://screener');
+      break;
+    case 'open.calendar':
+      openInternal('ib://calendar');
+      break;
+    case 'portfolio.import':
+      void importPortfolio();
+      break;
+    case 'portfolio.export':
+      void exportPortfolio();
+      break;
+    case 'quotes.refresh':
+      void runQuotes(undefined, true)
+        .then((r) => send('toast', { message: `Cotizaciones: ${r.filter((x) => x.ok).length} actualizadas${r.some((x) => !x.ok) ? `, ${r.filter((x) => !x.ok).length} sin dato` : ''}.`, kind: 'info' }))
+        .catch((err) => send('toast', { message: err instanceof Error ? err.message : 'No se pudieron actualizar las cotizaciones.', kind: 'error' }));
+      break;
     case 'research.export':
       void exportResearch(undefined, 'markdown');
       break;
@@ -750,6 +775,7 @@ function registerIpc(): void {
   registerSecIpc();
   registerEsefIpc();
   registerMarketIpc();
+  registerPortfolioIpc();
   scheduleQuotes(15_000);
   handle('data:clear', async (a: { what: 'cache' | 'siteData' }) => {
     const ses = session.fromPartition(WEB_PARTITION);
@@ -914,6 +940,125 @@ async function exportResearch(companyId: number | undefined, format: 'markdown' 
   const body = format === 'json' ? JSON.stringify(research.exportJson(companyId), null, 2) : research.exportMarkdown(companyId);
   writeFileSync(res.filePath, body, 'utf8');
   send('toast', { message: 'Investigación exportada.', kind: 'info' });
+}
+
+// ---------------------------------------------------------------- portfolio
+
+function registerPortfolioIpc(): void {
+  // Every change is broadcast, so all views stay in sync whoever made it.
+  const data = () => {
+    const d = portfolio.get();
+    send('portfolio', d);
+    return d;
+  };
+  const guard = <T>(fn: () => T): T => {
+    try {
+      return fn();
+    } catch (err) {
+      if (err instanceof ValidationError) throw new Error(err.message);
+      if (err instanceof Error && err.name === 'ZodError') throw new Error('Datos de la operación no válidos.');
+      throw err;
+    }
+  };
+  handle('portfolio:get', () => portfolio.get());
+  handle('portfolio:add', (a: { companyId: number }) => guard(() => (portfolio.add(a.companyId), data())));
+  handle('portfolio:remove', (a: { companyId: number }) => guard(() => (portfolio.remove(a.companyId), data())));
+  handle('portfolio:addOp', (a: OpInput) => guard(() => (portfolio.addOp(a), data())));
+  handle('portfolio:removeOp', (a: { id: number }) => guard(() => (portfolio.removeOp(a.id), data())));
+  handle('portfolio:snapshot', (a: { date: string; totalEur: number; costEur: number; positions: number }) => guard(() => void (portfolio.snapshot(a.date, a.totalEur, a.costEur, a.positions), data())));
+  handle('watchlist:set', (a: { companyId: number; target: number | null; note: string | null }) => guard(() => (portfolio.setWatch(a.companyId, a.target, a.note), data())));
+  handle('watchlist:remove', (a: { companyId: number }) => guard(() => (portfolio.removeWatch(a.companyId), data())));
+  handle('portfolio:import', () => importPortfolio());
+  handle('portfolio:export', () => exportPortfolio());
+}
+
+/** CSV rows from a broker → portfolio file. Tickers must be unambiguous (or carry their exchange). */
+function csvToPortfolio(text: string, fxToday: (c: string) => number | null): { file: PortfolioExport; warnings: string[] } {
+  const { rows, errors } = parseOpsCsv(text);
+  if (!rows.length) throw new ValidationError(errors[0] ?? 'El CSV no tiene operaciones.');
+  const warnings = [...errors];
+  const ops: PortfolioExport['ops'] = [];
+  for (const r of rows) {
+    const matches = companiesCache.filter((c) => c.ticker === r.ticker && (!r.exchange || c.exchange === r.exchange));
+    const exchange = r.exchange ?? (matches.length === 1 ? matches[0]!.exchange : null);
+    if (!exchange) {
+      warnings.push(`${r.ticker}: ${matches.length > 1 ? 'el ticker existe en varias bolsas' : 'empresa desconocida'}; añade la columna «bolsa» (BME, NYSE, EPA…).`);
+      continue;
+    }
+    const raw = exchangeCurrency(exchange) ?? 'EUR';
+    const { price, currency } = normalizeQuoteCurrency(r.price, raw);
+    const cur = currency ?? 'EUR';
+    const fx = cur === 'EUR' ? 1 : (r.fxPerEur ?? impliedFx({ ...r, price }) ?? fxToday(cur));
+    if (!fx) {
+      warnings.push(`${r.ticker} ${r.date ?? ''}: sin tipo de cambio para ${cur}.`);
+      continue;
+    }
+    if (cur !== 'EUR' && r.fxPerEur === null && r.totalEur === null) warnings.push(`${r.ticker} ${r.date ?? ''}: sin tipo de cambio de la operación; se usa el de hoy.`);
+    ops.push({ ticker: r.ticker, exchange, date: r.date, side: r.side, qty: r.qty, price, currency: cur, feeEur: r.feeEur, fxPerEur: fx, source: 'import' });
+  }
+  return { file: { format: 'investor-browser/portfolio', version: 1, holdings: [], watchlist: [], ops }, warnings };
+}
+
+async function importPortfolio(): Promise<{ companies: number; holdings: number; ops: number; watchlist: number; warnings: string[] } | null> {
+  if (!win) return null;
+  const res = await dialog.showOpenDialog(win, {
+    title: 'Importar cartera',
+    filters: [{ name: 'Cartera (JSON de Investor Browser) o CSV del bróker', extensions: ['json', 'csv', 'txt'] }],
+    properties: ['openFile'],
+  });
+  const file = res.filePaths[0];
+  if (res.canceled || !file) return null;
+  const fx = await getFx().catch(() => null);
+  const fxToday = (c: string) => fx?.rates.perEur[c] ?? null;
+  try {
+    const raw = readFileSync(file, 'utf8');
+    if (raw.length > 20 * 1024 * 1024) throw new ValidationError('Archivo demasiado grande.');
+    let parsed: unknown;
+    let extra: string[] = [];
+    if (/\.json$/i.test(file)) parsed = JSON.parse(raw);
+    else {
+      const c = csvToPortfolio(raw, fxToday);
+      parsed = c.file;
+      extra = c.warnings;
+    }
+    const preview = parsed as Partial<PortfolioExport>;
+    const tickers = new Set((preview.ops ?? []).map((o) => `${o.ticker}`));
+    // Replacing operations is destructive: always ask.
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'question',
+      buttons: ['Importar', 'Cancelar'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'Importar cartera',
+      message: `¿Importar ${preview.holdings?.length ?? 0} posición(es), ${preview.ops?.length ?? 0} operación(es) y ${preview.watchlist?.length ?? 0} empresa(s) en seguimiento?`,
+      detail: `${tickers.size ? `Las operaciones de ${[...tickers].slice(0, 12).join(', ')}${tickers.size > 12 ? '…' : ''} sustituirán a las que ya tuvieran. ` : ''}Las empresas que no existan se crearán. Puedes exportar tu cartera antes como copia.${extra.length ? `\n\nAvisos:\n${extra.slice(0, 8).join('\n')}` : ''}`,
+    });
+    if (response !== 0) return null;
+    const r = portfolio.import(parsed, fxToday);
+    r.warnings.unshift(...extra);
+    refreshCompanies();
+    send('portfolio', portfolio.get());
+    send('toast', { message: `Cartera importada: ${r.holdings} posición(es), ${r.ops} operación(es), ${r.watchlist} en seguimiento${r.warnings.length ? ` · ${r.warnings.length} aviso(s)` : ''}.`, kind: 'info' });
+    return r;
+  } catch (err) {
+    logError('portfolio.import', err);
+    const msg = err instanceof ValidationError ? err.message : 'El archivo no es una cartera válida (JSON de Investor Browser o CSV con ticker, acciones y precio).';
+    send('toast', { message: msg, kind: 'error' });
+    return null;
+  }
+}
+
+async function exportPortfolio(): Promise<string | null> {
+  if (!win) return null;
+  const res = await dialog.showSaveDialog(win, {
+    title: 'Exportar cartera',
+    defaultPath: `cartera-${new Date().toISOString().slice(0, 10)}.json`,
+    filters: [{ name: 'Cartera (JSON)', extensions: ['json'] }],
+  });
+  if (res.canceled || !res.filePath) return null;
+  writeFileSync(res.filePath, JSON.stringify(portfolio.export(), null, 2), 'utf8');
+  send('toast', { message: 'Cartera exportada.', kind: 'info' });
+  return res.filePath;
 }
 
 async function importResearch(): Promise<void> {

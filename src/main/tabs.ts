@@ -790,6 +790,9 @@ export function internalTitle(url: string): string {
     'ib://settings': 'Ajustes',
     'ib://research': 'Investigación',
     'ib://compare': 'Comparar empresas',
+    'ib://portfolio': 'Cartera',
+    'ib://screener': 'Screener',
+    'ib://calendar': 'Calendario',
   };
   if (url.startsWith('ib://valuation')) return 'Valoración';
   return map[url] ?? 'Investor Browser';

@@ -385,6 +385,20 @@ export interface FxRatesInfo {
   fetchedAt: number;
 }
 
+export interface WatchItem {
+  companyId: number;
+  target: number | null;
+  note: string | null;
+  addedAt: number;
+}
+
+export interface PortfolioData {
+  holdings: { companyId: number; addedAt: number }[];
+  ops: import('./portfolio').PortfolioOp[];
+  watchlist: WatchItem[];
+  snapshots: { date: string; totalEur: number; costEur: number; positions: number }[];
+}
+
 export interface SecSyncResult {
   facts: number;
   periods: string[];

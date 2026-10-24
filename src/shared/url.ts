@@ -3,8 +3,8 @@
  * can be unit-tested in plain Node.
  */
 
-export type InternalPage = 'newtab' | 'history' | 'bookmarks' | 'downloads' | 'settings' | 'research' | 'company' | 'valuation' | 'compare';
-export const INTERNAL_PAGES: readonly InternalPage[] = ['newtab', 'history', 'bookmarks', 'downloads', 'settings', 'research', 'company', 'valuation', 'compare'];
+export type InternalPage = 'newtab' | 'history' | 'bookmarks' | 'downloads' | 'settings' | 'research' | 'company' | 'valuation' | 'compare' | 'portfolio' | 'screener' | 'calendar';
+export const INTERNAL_PAGES: readonly InternalPage[] = ['newtab', 'history', 'bookmarks', 'downloads', 'settings', 'research', 'company', 'valuation', 'compare', 'portfolio', 'screener', 'calendar'];
 /** Pages that take a numeric id: required for company, optional for valuation. */
 const ID_PAGES: Record<string, 'required' | 'optional'> = { company: 'required', valuation: 'optional' };
 
