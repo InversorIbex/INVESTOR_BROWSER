@@ -62,7 +62,15 @@ jobs:
       # Builds the Microsoft Store package with a dummy identity, only to catch config errors early.
       # It is NOT uploaded: the real one uses the Partner Center identity (see docs/MICROSOFT_STORE.md).
       - name: Microsoft Store package (test identity, not published)
-        run: npx electron-builder --win appx --x64 --publish never -c.appx.identityName=InvestorBrowser.CITest -c.appx.publisher=CN=00000000-0000-0000-0000-000000000000 -c.appx.publisherDisplayName=CI
+        shell: pwsh
+        run: |
+          npx electron-builder --win appx --x64 --publish never "-c.appx.identityName=InvestorBrowser.CITest" "-c.appx.publisher=CN=00000000-0000-0000-0000-000000000000" "-c.appx.publisherDisplayName=CI" *>&1 | Tee-Object -FilePath appx.log
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            # Surface the end of the log as annotations (readable from the checks API).
+            Get-Content appx.log -Tail 25 | Where-Object { $_.Trim() } | ForEach-Object { Write-Output "::error title=appx::$($_ -replace '[\r\n]', ' ')" }
+            exit $code
+          }
       - name: SHA-256
         shell: pwsh
         run: Get-FileHash release/*.exe -Algorithm SHA256 | Format-List | Out-File release/SHA256.txt
