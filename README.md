@@ -80,6 +80,21 @@ Múltiplos, DCF en tres escenarios y sensibilidad, con tus cifras y **el origen 
   - máximo 8 consultas por segundo;
   - caché local, que también da una copia fechada si no hay conexión.
 
+### 🇪🇺 Empresas europeas automáticas (ESEF)
+Cuentas anuales **oficiales** de cotizadas de España, Francia, Italia, Países Bajos, Dinamarca, Reino Unido… desde el repositorio público de XBRL International. Gratis y sin clave. Busca por nombre o LEI, importa y cada cifra enlaza al visor oficial del informe. Alemania y Suiza no tienen fuente automática (se dice claramente); las que presentan 20-F llegan por la SEC.
+
+### 💹 Cotizaciones retrasadas, sin coste
+Con tu **clave gratuita** de Finnhub (EE. UU.) y/o EODHD (cualquier bolsa, 15 min de retraso), cifrada por Windows. Cupo diario que nunca se supera, hora del dato visible y conversión de divisa con el BCE. O selecciona un precio en cualquier web › *Usar como cotización*.
+
+### 💼 Cartera y seguimiento
+FIFO como en el IRPF, comisiones, **plusvalía separada en efecto precio y efecto divisa**, ganancias realizadas por año, foto diaria del patrimonio, reparto por zona y divisa, precio objetivo en seguimiento. Importa tu cartera (JSON o CSV del bróker).
+
+### 🔎 Screener
+Sobre tus empresas y con datos oficiales: PER, P/FCL, EV/EBITDA, ROIC, márgenes, deuda neta/EBITDA, dilución, crecimiento… Ocho estrategias rápidas (Compounders, GARP, Dividendo creciente…), filtros por rango, puntuaciones percentiles y mapa calidad/precio. Cada cifra dice de dónde sale.
+
+### 📅 Calendario bursátil
+Resultados y dividendos de tu cartera y seguimiento: **confirmados** (Finnhub, EODHD) o **estimados** con la periodicidad de cada empresa, siempre etiquetados. Tus propias fechas y exportación a `.ics`.
+
 ### 🔬 Análisis que se explica solo
 - **Calidad del negocio**: siete criterios independientes (crecimiento, margen, conversión en caja, ROIC, deuda, dilución y estabilidad).
   - Cada uno muestra **su regla, su fórmula y las cifras exactas** que usa.
@@ -140,6 +155,13 @@ Pestañas verticales (estilo Arc) u horizontales, fijadas, reordenables y reabri
 <tr>
 <td width="50%"><img src="docs/screenshots/guardar-cita.png" alt="Guardar una cita con su fuente"><br><sub><b>Guardar en investigación</b> · la cita conserva URL, título y fecha</sub></td>
 <td width="50%"><img src="docs/screenshots/valoracion.png" alt="Laboratorio de valoración"><br><sub><b>Valoración</b> · cada dato muestra de dónde viene</sub></td>
+</tr>
+<tr>
+<td colspan="2"><img src="docs/screenshots/v06-cartera.png" alt="Cartera con FIFO, efecto divisa y evolución"><br><sub><b>Cartera</b> · FIFO, plusvalía con efecto divisa, foto diaria y reparto por zona y divisa (posiciones y evolución de ejemplo)</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/v06-esef.png" alt="Cuentas oficiales ESEF de una empresa europea"><br><sub><b>Europa (ESEF)</b> · cuentas anuales oficiales con visor y re-expresiones (empresa sintética)</sub></td>
+<td width="50%"><img src="docs/screenshots/v06-calendario.png" alt="Calendario de resultados y dividendos"><br><sub><b>Calendario</b> · confirmado frente a estimado, siempre etiquetado</sub></td>
 </tr>
 <tr>
 <td colspan="2"><img src="docs/screenshots/sec-edgar.png" alt="Cifras oficiales de la SEC con procedencia y re-expresión"><br><sub><b>SEC EDGAR</b> · cifras XBRL con documento, concepto y periodo; ⚠ marca una cifra re-expresada en un informe posterior (empresa sintética de prueba)</sub></td>
@@ -314,7 +336,7 @@ src/
 
 ## ✅ Calidad y pruebas
 
-- **121 pruebas unitarias**, entre ellas:
+- **169 pruebas unitarias**, entre ellas:
   - interpretación de cifras en formatos de EE. UU. y Europa;
   - DCF contrastado con un cálculo a mano;
   - rechazo de dominios impostores;
@@ -324,7 +346,7 @@ src/
   - cliente SEC: sin petición sin contacto, ritmo, caché, errores;
   - análisis contrastado a mano (CAGR, ROIC con capital medio, ratio de Sloan) en casos fuertes, débiles y sin datos;
   - Form 4 con la estructura de un formulario real, plan 10b5-1 por casilla y por nota, y XML hostil (XXE, «billion laughs»).
-- **8 pruebas E2E con Electron real** contra servidores locales, sin depender de Internet:
+- **13 pruebas E2E con Electron real** contra servidores locales, sin depender de Internet:
   - navegación, pestañas, atrás/adelante, búsqueda y errores;
   - persistencia tras reiniciar y descargas;
   - paleta de comandos;
@@ -349,6 +371,7 @@ src/
 - [x] **Fase 4** · Quality Compounder · Financial Forensics · Insider Tracker (Form 4) · Comparar empresas
 - [ ] **Crash Replay** · pendiente de una fuente de cotizaciones históricas con licencia gratuita
 - [ ] **Fase 5** · Investment Copilot **opcional**: sin IA por defecto, con consentimiento antes de enviar nada
+- [x] **v0.6** · Europa automática (ESEF) · cotizaciones retrasadas con clave gratuita · cartera FIFO · screener · calendario
 - [ ] **Fase 6** · ✅ *fuses* de Electron y prueba de la app empaquetada · ✅ paquete para Microsoft Store (firma gratuita de Microsoft) · ⏳ envío y certificación en la Store · ⏳ pruebas en Windows 10 y 11 reales
 
 Criterios de aceptación y riesgos: [docs/ROADMAP.md](docs/ROADMAP.md) · Cambios: [CHANGELOG.md](CHANGELOG.md)

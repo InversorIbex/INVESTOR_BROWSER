@@ -66,6 +66,18 @@ Decisión de diseño: «Cross-Tab Research» no extrae el contenido de las pesta
 
 Pendiente de verificar en un equipo con acceso a sec.gov: lectura de Form 4 reales de 3 emisores (incluido uno con varios titulares en el mismo formulario).
 
+## v0.6.0 — Datos automáticos y herramientas de inversor
+
+| Criterio | Estado | Verificación |
+| --- | --- | --- |
+| Europa automática (ESEF vía filings.xbrl.org): ES, FR, IT, NL, DK, GB… | ✅ | Formatos comprobados con respuestas reales (Enagás, oct. 2026). Unit (fixture con trampas: versiones corregidas, re-expresión, dimensiones, fin de periodo exclusivo) + E2E |
+| Alemania / Suiza | ⚠️ Sin fuente automática oficial | Aviso explícito en el dossier; 20-F por la SEC; captura desde el informe |
+| Cotizaciones retrasadas con clave gratuita (Finnhub, EODHD) y captura desde web | ✅ | Unit + E2E con servidores simulados (cupo, cabeceras, claves ausentes del perfil). **No verificado en vivo** |
+| Divisa: precio y cuentas en la misma moneda (BCE) | ✅ | Unit (cruces, peniques) + E2E (PER con ADR en USD y cuentas en EUR) |
+| Cartera FIFO, comisiones, efecto divisa, realizadas, foto diaria, seguimiento, importación | ✅ | Unit (cálculos a mano, importación atómica e idempotente) + E2E |
+| Screener con métricas oficiales, estrategias y mapa | ✅ | Unit (valores a mano, percentiles) + E2E |
+| Calendario de resultados y dividendos (confirmado / estimado / tuyo), .ics | ✅ | Unit + E2E |
+
 ## Fase 5 — Investment Copilot
 
 Sin IA por defecto. Proveedor externo o local configurado por el usuario; claves en `safeStorage`; vista previa y consentimiento antes de enviar contenido; respuestas separadas en hechos verificados / cálculos / interpretación / lo que falta.

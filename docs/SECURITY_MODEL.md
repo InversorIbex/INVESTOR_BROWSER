@@ -47,6 +47,16 @@ El principio: **el contenido web es hostil**. Ninguna página puede alcanzar Nod
     - El filtro de búsqueda se construye con un nombre saneado o un LEI validado.
     - El xBRL-JSON se analiza como datos: solo hechos numéricos `ifrs-full` sin dimensiones.
     - `IB_ESEF_BASE_URL` (solo pruebas) se ignora salvo que sea `http://127.0.0.1:<puerto>`.
+14c. **Cotizaciones y claves de API:**
+    - Las claves (Finnhub, EODHD) se prueban antes de guardarse y se cifran con `safeStorage` (DPAPI en Windows).
+    - Si el sistema solo ofrece cifrado débil (Linux sin llavero), se rechazan.
+    - La UI nunca recibe la clave: solo «configurada ····1234».
+    - Finnhub recibe la clave en cabecera. EODHD la exige en la URL, que nunca se registra ni se usa como clave de caché.
+    - Sesión de red propia (`market-data`) limitada a `finnhub.io`, `eodhd.com` y `data-api.ecb.europa.eu`.
+    - Un test E2E comprueba que las claves no aparecen en claro en ningún archivo del perfil.
+    - `IB_MARKET_BASE_URL` (solo pruebas) se ignora salvo que sea `http://127.0.0.1:<puerto>`. El cifrado de prueba solo se activa en builds sin empaquetar.
+    - «Usar como cotización» lee el número que el usuario seleccionó, lo muestra y exige confirmación.
+14d. **Cartera e importaciones:** importación validada con Zod y atómica. Sustituir las operaciones de un valor exige confirmación. CSV limitado a 5 000 filas y 20 MB.
 15. **Form 4 (XML):** lector propio (`src/shared/miniXml.ts`) que ignora DOCTYPE y entidades definidas por el documento (sin XXE ni «billion laughs»), con límites de 5 MB, 64 niveles y 100 000 nodos. Los nombres de archivo se validan y un formulario de otro emisor se rechaza.
 16. **User-Agent:** se elimina el token `Electron/x.y` para que las webs traten la app como Chrome. No afecta a la seguridad.
 

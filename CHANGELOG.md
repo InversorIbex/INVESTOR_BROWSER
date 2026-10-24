@@ -2,6 +2,26 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/); versionado [SemVer](https://semver.org/lang/es/).
 
+## [0.6.0] — 2026-10-24
+
+### Añadido
+- **Empresas europeas automáticas (ESEF)**: cuentas anuales oficiales desde filings.xbrl.org, con búsqueda por nombre o LEI, re-expresiones, visor oficial y avisos de cobertura. Alemania y Suiza no tienen fuente automática.
+- **Cotizaciones retrasadas** con clave gratuita propia:
+  - Finnhub (EE. UU.) y EODHD (cualquier bolsa, 15 min), con claves cifradas por el sistema y cupo diario que nunca se supera;
+  - captura de precio desde cualquier web (clic derecho);
+  - tipos de cambio del BCE y conversión de divisa en calidad, comparación y valoración.
+- **Cartera y seguimiento** (`ib://portfolio`):
+  - FIFO, comisiones y efecto divisa;
+  - ganancias realizadas por año, foto diaria, evolución y reparto;
+  - precio objetivo en la lista de seguimiento;
+  - importación JSON y CSV del bróker, y exportación.
+- **Screener** (`ib://screener`): métricas oficiales con procedencia, 8 estrategias, filtros por rango, puntuaciones percentiles, mapa calidad/precio e importación masiva de cifras oficiales.
+- **Calendario bursátil** (`ib://calendar`): resultados y dividendos confirmados o estimados (siempre etiquetados), fechas propias y exportación `.ics`.
+- Métrica D&A (para EBITDA) y deuda bruta IFRS por componentes.
+
+### Corregido
+- La tabla de ROIC ya no queda tapada por el panel lateral: se desplaza dentro de su tarjeta.
+
 ## [0.5.0] — 2026-10-24
 
 ### Añadido — Fase 6 (primera parte): endurecimiento y distribución
